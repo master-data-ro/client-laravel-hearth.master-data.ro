@@ -1,0 +1,21 @@
+{
+  "name": "hearth/license-client",
+  "description": "Laravel helper package that verifies a license key against hearth.master-data.ro and stores the result locally.",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Hearth\\LicenseClient\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Hearth\\LicenseClient\\LicenseServiceProvider"
+      ]
+    }
+  },
+  "require": {
+    "php": ">=8.0"
+  }
+}
