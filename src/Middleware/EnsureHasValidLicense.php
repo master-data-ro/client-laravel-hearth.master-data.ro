@@ -17,7 +17,8 @@ class EnsureHasValidLicense
 
         $store = storage_path('license.json');
         if (!file_exists($store)) {
-            return response('License required', 403);
+            $message = \Hearth\LicenseClient\Messages::get('not_present');
+            return response()->view('license-client::blocked', ['message' => $message], 403);
         }
 
         $raw = file_get_contents($store);
@@ -27,18 +28,28 @@ class EnsureHasValidLicense
 
         $decoded = json_decode($raw, true);
         if (!is_array($decoded) || empty($decoded['payload']) || empty($decoded['encrypted'])) {
-            return response('License invalid', 403);
+            $message = \Hearth\LicenseClient\Messages::get('invalid');
+            return response()->view('license-client::blocked', ['message' => $message], 403);
         }
 
         try {
             $plaintext = Encryption::decryptString($decoded['payload']);
             $obj = json_decode($plaintext, true);
-        } catch (\Throwable $e) {
-            return response('License invalid', 403);
+        } catch (Throwable $e) {
+            $message = \Hearth\LicenseClient\Messages::get('invalid');
+            return response()->view('license-client::blocked', ['message' => $message], 403);
         }
 
         if (empty($obj) || empty($obj['license_key'])) {
-            return response('License invalid', 403);
+            $message = \Hearth\LicenseClient\Messages::get('invalid');
+            return response()->view('license-client::blocked', ['message' => $message], 403);
+        }
+
+        // Require authority-declared validity flag
+        $validFlag = $obj['data']['valid'] ?? null;
+        if ($validFlag !== true) {
+            $message = \Hearth\LicenseClient\Messages::get('not_active');
+            return response()->view('license-client::blocked', ['message' => $message], 403);
         }
 
         // optional: expire check if present
@@ -47,7 +58,8 @@ class EnsureHasValidLicense
             try {
                 $expTs = strtotime($expires);
                 if ($expTs !== false && $expTs < time()) {
-                    return response('License expired', 403);
+                    $message = config('license-client.messages.expired');
+                    return response()->view('license-client::blocked', ['message' => $message], 403);
                 }
             } catch (\Throwable $e) {
                 // ignore parse errors and allow if not parseable
@@ -58,7 +70,8 @@ class EnsureHasValidLicense
         $appUrl = config('app.url') ?? env('APP_URL', '');
         $host = parse_url($appUrl, PHP_URL_HOST) ?: gethostname();
         if (!empty($obj['domain']) && $obj['domain'] !== $host) {
-            return response('License domain mismatch', 403);
+            $message = \Hearth\LicenseClient\Messages::get('domain_mismatch');
+            return response()->view('license-client::blocked', ['message' => $message], 403);
         }
 
         // license looks okay, allow request
