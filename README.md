@@ -34,8 +34,13 @@ Notes:
 - This package is intentionally minimal and only used by clients; it does not alter the server.
 
 Encryption and middleware
-- The package now saves the verified license encrypted by default using the application's `APP_KEY` (AES-256-CBC). The saved file is `storage/license.json` and contains a small JSON wrapper with the encrypted payload.
-- A middleware stub `Hearth\\LicenseClient\\Middleware\\EnsureHasValidLicense` is included in the package. Register it in your app and it will return HTTP 403 when the license file is missing, invalid, expired, or domain-mismatched.
+- The package saves the verified license encrypted by default using the application's `APP_KEY` (AES-256-CBC). The saved file is `storage/license.json` and contains a small JSON wrapper with the encrypted payload.
+- By default the package will *enforce* the license check automatically: when the package is registered it pushes `Hearth\\LicenseClient\\Middleware\\EnsureHasValidLicense` into the `web` middleware group and the application will return HTTP 403 for web requests until a valid license is present.
+
+Enforcement (mandatory)
+- The package enforces the license check automatically and this behavior is mandatory: the middleware is added to the `web` group on package boot and web requests will receive HTTP 403 until a valid license is present. This cannot be disabled from the environment by design.
+
+If you need to exempt specific internal tooling or health endpoints, perform that logic in your own application before the middleware runs (for example register a higher-priority middleware), but the package itself will not provide an opt-out.
 
 Usage examples:
 

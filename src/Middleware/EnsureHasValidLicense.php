@@ -9,6 +9,12 @@ class EnsureHasValidLicense
 {
     public function handle($request, Closure $next)
     {
+        // Allow in console (artisan) so CLI tasks continue to work. For web
+        // requests, do not allow exceptions: block until a valid license exists.
+        if (app()->runningInConsole()) {
+            return $next($request);
+        }
+
         $store = storage_path('license.json');
         if (!file_exists($store)) {
             return response('License required', 403);
