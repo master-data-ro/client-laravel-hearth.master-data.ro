@@ -3,10 +3,16 @@
 <div class="container py-4">
     <h1>Licență locală</h1>
 
-    @if(session('error'))
+    {{-- Prefer license-specific flash keys to avoid duplicate generic alerts rendered by host layout --}}
+    @if (session('license_error'))
+        <div class="alert alert-danger">{{ session('license_error') }}</div>
+    @elseif (session('error'))
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
-    @if(session('success'))
+
+    @if (session('license_success'))
+        <div class="alert alert-success">{{ session('license_success') }}</div>
+    @elseif (session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
@@ -40,6 +46,21 @@
         </div>
 
         <div class="mb-2">
+            @php
+                $isManual = isset($license['data']['issued_by_manual_upload']) && $license['data']['issued_by_manual_upload'];
+                $isValid = isset($license['data']['valid']) && $license['data']['valid'];
+            @endphp
+
+            @if ($isManual && ! $isValid)
+                <div class="alert alert-warning">
+                    Licența a fost instalată manual local — trebuie verificată la autoritate.
+                </div>
+                <form method="POST" action="{{ route('license-client.licente.verify') }}" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-primary">Verifică la autoritate</button>
+                </form>
+            @endif
+
             <form method="POST" action="{{ route('license-client.licente.verify') }}" class="d-inline">
                 @csrf
                 <button type="submit" class="btn btn-primary" @if(!empty($isValid)) disabled title="Licența este validă și nu poate fi verificată manual" @endif>Verifică licența</button>
