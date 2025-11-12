@@ -1,13 +1,13 @@
 # Hearth License Client
 
-[View on GitHub](https://github.com/emsici/hearth-license-client) | [View on Packagist](https://packagist.org/packages/hearth/license-client)
+[View on GitHub](https://github.com/master-data-ro/hearth-license-client)
 
 ## Instalare / Installation
 
-Adaugă în `composer.json` sau instalează direct:
+Adaugă în `composer.json` sau instalează direct din repository:
 
 ```bash
-composer require hearth/license-client
+composer require master-data-ro/hearth-license-client:dev-main
 ```
 
 Pentru testare locală, poți adăuga un repository de tip `path`:
@@ -15,8 +15,8 @@ Pentru testare locală, poți adăuga un repository de tip `path`:
 ```json
 "repositories": [
   {
-    "type": "path",
-    "url": "../cale/către/hearth/master-data/sdk/laravel-license-client"
+    "type": "vcs",
+    "url": "https://github.com/master-data-ro/hearth-license-client.git"
   }
 ]
 ```
@@ -49,7 +49,7 @@ php artisan make:license-server LICENTA-TA
 
 Acest flux asigură că doar licențele validate de autoritate pot debloca aplicația, iar orice modificare locală este detectată și blocată.
 
-## Diagramă flux licențiere (textuală, compatibilă cu GitHub):
+## Flux
 
 1. **Clientul** (comandă/Interfață): Trimite cheie + domeniu către autoritate
 2. **Autoritatea** (hearth.master-data.ro): Răspunde cu status (valid/pending/invalid) + semnătură
@@ -84,11 +84,11 @@ Client → Autoritate → Client → Middleware → Aplicație
 ## Notă enforcement
 
 - Middleware-ul de enforcement nu poate fi dezactivat din environment.
+- Pentru excluderi (ex: health, admin), folosește un middleware local cu prioritate mai mare.
 
 ## Linkuri utile
 
-- [GitHub: emsici/hearth-license-client](https://github.com/emsici/hearth-license-client)
-- [Packagist: hearth/license-client](https://packagist.org/packages/hearth/license-client)
+- [GitHub: master-data-ro/hearth-license-client](https://github.com/master-data-ro/hearth-license-client)
 
 ---
 © 2025 master-data.ro
