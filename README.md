@@ -1,4 +1,4 @@
-# Hearth License Client
+# hearth.master-data.ro client
 
 [View on GitHub](https://github.com/master-data-ro/hearth-license-client)
 
