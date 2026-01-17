@@ -228,18 +228,18 @@ class LicenseServiceProvider extends ServiceProvider
                                                 }
                                             }
                                             if (! $found) {
-                                                            // Notify authority (best-effort) before aborting
-                                                            $alert = [
-                                                                'host' => $this->app->make('config')->get('app.url') ?? env('APP_URL', ''),
-                                                                'message' => 'Authority JWKS does not include the private key\'s public counterpart',
-                                                                'time' => now()->toIso8601String(),
-                                                            ];
-                                                            try {
-                                                                $this->notifyAuthorityAlert($priv, $alert);
-                                                            } catch (\Throwable $_e) {
-                                                                logger()->warning('Failed to send authority alert: ' . $_e->getMessage());
-                                                            }
-                                                            throw new \RuntimeException('Authority JWKS does not include the private key\'s public counterpart — aborting boot.');
+                                                // Notify authority (best-effort) before aborting
+                                                $alert = [
+                                                    'host' => $this->app->make('config')->get('app.url') ?? env('APP_URL', ''),
+                                                    'message' => 'Authority JWKS does not include the private key\'s public counterpart',
+                                                    'time' => now()->toIso8601String(),
+                                                ];
+                                                try {
+                                                    $this->notifyAuthorityAlert($priv, $alert);
+                                                } catch (\Throwable $_e) {
+                                                    logger()->warning('Failed to send authority alert: ' . $_e->getMessage());
+                                                }
+                                                throw new \RuntimeException('Authority JWKS does not include the private key\'s public counterpart — aborting boot.');
                                             }
                                         } else {
                                             logger()->warning('Authority JWKS not available during integrity check (HTTP ' . $resp->status() . '), continuing with bundled key validation.');
@@ -296,8 +296,11 @@ class LicenseServiceProvider extends ServiceProvider
             if ($isAuthority) {
                 logger()->info('License client: this application is configured as authority — skipping enforcement middleware.');
             } else {
-                $router = $this->app->make('router');
-                $router->pushMiddlewareToGroup('web', \Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
+                // Automatically register license middleware to web group
+                // This works by accessing the router after it's resolved
+                $this->app->afterResolving(\Illuminate\Routing\Router::class, function (\Illuminate\Routing\Router $router) {
+                    $router->pushMiddlewareToGroup('web', \Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
+                });
             }
         } catch (\Throwable $e) {
             // don't break the application if something goes wrong here
