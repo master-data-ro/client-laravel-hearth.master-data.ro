@@ -22,7 +22,7 @@ class LicenseServiceProvider extends ServiceProvider
      */
     protected function verifyBundledKeyAgainstJwks()
     {
-        $authority = \Hearth\LicenseClient\Package::authorityUrl() ?? null;
+        $authority = config('license.authority', 'https://hearth.master-data.ro');
         if (empty($authority)) {
             return; // nothing to verify against
         }
@@ -30,7 +30,7 @@ class LicenseServiceProvider extends ServiceProvider
         $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
 
         try {
-            $resp = Http::timeout(\Hearth\LicenseClient\Package::remoteTimeout())->get($jwksUrl);
+            $resp = Http::timeout(10)->get($jwksUrl);
         } catch (\Throwable $e) {
             // Could not fetch JWKS; allow boot to continue (network issues)
             logger()->warning('Could not fetch JWKS for license-client verification: ' . $e->getMessage());
@@ -94,12 +94,12 @@ class LicenseServiceProvider extends ServiceProvider
      */
     protected function notifyAuthorityAlert(?string $privatePem, array $alert): void
     {
-        $authority = \Hearth\LicenseClient\Package::authorityUrl() ?? null;
+        $authority = config('license.authority', 'https://hearth.master-data.ro');
         if (empty($authority)) {
             return;
         }
 
-        $endpoint = rtrim($authority, '/') . (\Hearth\LicenseClient\Package::alertEndpoint());
+        $endpoint = rtrim($authority, '/') . '/api/alert';
 
         $payloadJson = json_encode($alert, JSON_UNESCAPED_SLASHES);
         $signature = null;
@@ -140,13 +140,18 @@ class LicenseServiceProvider extends ServiceProvider
         // No config publish — all options are internal to the package.
 
         // Load package views (embedded, not publishable) so blocked page is always available
-        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'license-client');
+        if (file_exists(__DIR__ . '/../resources/views')) {
+            $this->loadViewsFrom(__DIR__ . '/../resources/views', 'license-client');
+        }
 
         // Load package web routes for interactive license management (/licente)
         // These routes are intentionally minimal and placed inside the package so
         // that the host application does not need to provide an interactive
         // license UI.
-        $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        $routesPath = __DIR__ . '/../routes/web.php';
+        if (file_exists($routesPath)) {
+            $this->loadRoutesFrom($routesPath);
+        }
         if ($this->app->runningInConsole()) {
             $this->commands([
                 Console\MakeLicenseServerCommand::class,
@@ -166,7 +171,7 @@ class LicenseServiceProvider extends ServiceProvider
             // application is the authority. A private key is required to sign
             // license payloads and should not be present on client installs.
             try {
-                $privPath = \Hearth\LicenseClient\Package::privateKeyPath();
+                $privPath = config('license.private_key_path', storage_path('keys/private.pem'));
                 if (empty($privPath)) {
                     // no private key -> not authority (continue)
                 }
@@ -211,11 +216,11 @@ class LicenseServiceProvider extends ServiceProvider
 
                                 // If authority JWKS is reachable, ensure it contains
                                 // a key matching our private key parameters.
-                                $authority = \Hearth\LicenseClient\Package::authorityUrl() ?? null;
+                                $authority = config('license.authority', 'https://hearth.master-data.ro');
                                 if (!empty($authority)) {
                                     try {
                                         $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
-                                        $resp = Http::timeout(\Hearth\LicenseClient\Package::remoteTimeout())->get($jwksUrl);
+                                        $resp = Http::timeout(10)->get($jwksUrl);
                                         if ($resp->successful()) {
                                             $json = $resp->json();
                                             $found = false;
@@ -282,7 +287,7 @@ class LicenseServiceProvider extends ServiceProvider
             // is weaker but allows local development setups where keys are not
             // present.
             if (! $isAuthority) {
-                $authority = \Hearth\LicenseClient\Package::authorityUrl() ?? null;
+                $authority = config('license.authority', 'https://hearth.master-data.ro');
                 if (!empty($authority)) {
                     $authHost = parse_url(rtrim($authority, '/'), PHP_URL_HOST) ?: null;
                     $appUrl = config('app.url') ?? env('APP_URL', '');
@@ -310,7 +315,7 @@ class LicenseServiceProvider extends ServiceProvider
         // all requests (including routes not in 'web' group). This is a
         // package-level decision and controlled via config.
         try {
-            if (\Hearth\LicenseClient\Package::globalEnforce()) {
+            if (config('license.global_enforce', false)) {
                 $kernel = $this->app->make(\Illuminate\Contracts\Http\Kernel::class);
                 if (method_exists($kernel, 'prependMiddleware')) {
                     $kernel->prependMiddleware(\Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
@@ -323,7 +328,7 @@ class LicenseServiceProvider extends ServiceProvider
         // If we detected a private key and integrity validated, write a
         // signed fingerprint file for future reference.
         try {
-            $privPath = \Hearth\LicenseClient\Package::privateKeyPath();
+            $privPath = config('license.private_key_path', storage_path('keys/private.pem'));
 
             if (!empty($privPath) && file_exists($privPath)) {
                 $priv = @file_get_contents($privPath);
@@ -366,7 +371,7 @@ class LicenseServiceProvider extends ServiceProvider
                             }
 
                             $wrapper = json_encode(['fingerprint' => $fingerprint, 'signature' => $sig, 'created_at' => now()->toIso8601String()], JSON_UNESCAPED_SLASHES|JSON_PRETTY_PRINT);
-                            $fpFile = storage_path(\Hearth\LicenseClient\Package::fingerprintFile());
+                            $fpFile = storage_path('license-fingerprint.json');
                             @file_put_contents($fpFile, $wrapper);
                         } catch (\Throwable $e) {
                             logger()->warning('Failed to write signed fingerprint: ' . $e->getMessage());
@@ -383,13 +388,17 @@ class LicenseServiceProvider extends ServiceProvider
         // Register a simple signed-push endpoint so the authority can POST a
         // signed license payload directly to this client. This is registered
         // on the API middleware group to avoid CSRF requirements.
+        // Only register if controller exists
         try {
-            \Illuminate\Support\Facades\Route::post('/.well-known/push-license', '\\Hearth\\LicenseClient\\Controllers\\PushLicenseController@receive')
-                ->middleware('api');
+            $controllerClass = '\\Hearth\\LicenseClient\\Controllers\\PushLicenseController';
+            if (class_exists($controllerClass)) {
+                \Illuminate\Support\Facades\Route::post('/.well-known/push-license', $controllerClass . '@receive')
+                    ->middleware('api');
 
-            // Health-check GET for easier probing of the endpoint
-            \Illuminate\Support\Facades\Route::get('/.well-known/push-license', '\\Hearth\\LicenseClient\\Controllers\\PushLicenseController@health')
-                ->middleware('api');
+                // Health-check GET for easier probing of the endpoint
+                \Illuminate\Support\Facades\Route::get('/.well-known/push-license', $controllerClass . '@health')
+                    ->middleware('api');
+            }
         } catch (\Throwable $e) {
             // ignore if route registration fails
         }
