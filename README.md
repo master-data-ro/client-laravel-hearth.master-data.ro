@@ -42,11 +42,13 @@ php artisan package:discover --ansi
 php artisan optimize:clear
 ```
 
-Diagnostic din pachet (după ce providerul e încărcat — dacă comanda lipsește, pachetul nu e descoperit):
+Diagnostic din pachet (**hearth/license-client ≥ 0.1.1**; pe 0.1.0 comanda nu există — rulează `composer update hearth/license-client`):
 
 ```bash
 php artisan license-client:status
 ```
+
+Dacă vezi `There are no commands defined in the "license-client" namespace`, pachetul din `vendor/` e încă vechi sau providerul nu e încărcat: actualizează la **0.1.1+**, apoi `php artisan package:discover` și eventual adaugă manual providerul în `bootstrap/providers.php`.
 
 3. Dacă tot nu merge, înregistrează provider-ul **manual** în `bootstrap/providers.php` (Laravel 11, 12, 13):  
    `Hearth\LicenseClient\LicenseServiceProvider::class,`
@@ -78,7 +80,9 @@ php artisan license-client:status
 
 2. La succes, pachetul va salva fișierul `storage/license.json` cu metadatele licenței (criptat).
 
-3. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Aplicația răspunde cu HTTP 403 până există o licență validă în `storage/license.json` (excepții: consolă, mod autoritate, rute whitelist).
+3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): doar **`/licenta`** — status și activare cheie (accesibilă **doar când licența nu e validă**; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-ul rămâne doar în cod (`Package`).
+
+4. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Aplicația răspunde cu HTTP 403 până există o licență validă în `storage/license.json` (excepții: consolă, mod autoritate, rute whitelist).
 
 ## Cum funcționează (Principiul "ping-pong")
 
@@ -126,7 +130,7 @@ Client → Autoritate → Client → Middleware → Aplicație
 
 ## Notă enforcement
 
-- Middleware-ul de enforcement nu poate fi dezactivat. Anumite rute sensibile (ex: health, JWKS, interfața de licență) sunt permise implicit de pachet.
+- Middleware-ul de enforcement nu poate fi dezactivat. **`/licenta`** este accesibilă **doar fără licență validă**; cu licență activă se redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
 
 ## Linkuri utile
 

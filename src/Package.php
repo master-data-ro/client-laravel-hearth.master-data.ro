@@ -26,14 +26,13 @@ final class Package
     /** Relative to Laravel storage/ — authority signing key (fixed; not configurable). */
     private const AUTHORITY_PRIVATE_KEY_STORAGE = 'keys/private.pem';
 
-    // Whitelisted paths that bypass enforcement (prefix matches)
+    // Whitelisted paths that bypass enforcement (prefix matches).
+    // /licenta nu e aici — e tratată în middleware (doar fără licență validă).
     private const WHITELIST = [
         '/health',
         '/.well-known/push-license',
         '/.well-known/jwks.json',
         '/keys/pem',
-        '/licente',
-        '/licenta',
         '/setari',
     ];
 
@@ -83,6 +82,14 @@ final class Package
     public static function whitelist(): array
     {
         return self::WHITELIST;
+    }
+
+    /**
+     * Rutele UI pentru activarea licenței (doar /licenta). Accesibile doar când licența nu e validă.
+     */
+    public static function isLicenseActivationPath(string $path): bool
+    {
+        return $path === '/licenta' || str_starts_with($path, '/licenta/');
     }
 
     /**

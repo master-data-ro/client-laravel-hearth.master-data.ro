@@ -25,6 +25,15 @@ class EnsureHasValidLicense
             return $this->withLicenseProbeMetadata($request, $next);
         }
 
+        // /licenta*: doar când licența NU e validă (altfel redirect acasă). URL-ul autorității nu apare în UI.
+        if (Package::isLicenseActivationPath($path)) {
+            if (LicenseState::resolve()['ok']) {
+                return redirect('/');
+            }
+
+            return $next($request);
+        }
+
         // Allow whitelisted paths (prefix match), except /health which gets license metadata on the response.
         $whitelist = Package::whitelist();
         foreach ($whitelist as $allowed) {

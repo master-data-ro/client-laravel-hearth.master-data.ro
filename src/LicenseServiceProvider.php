@@ -10,6 +10,11 @@ class LicenseServiceProvider extends ServiceProvider
     public function register()
     {
         // No mergeable config: enforcement and paths come only from Package.
+        // Register Artisan commands here so they exist even if boot() fails later.
+        $this->commands([
+            Console\MakeLicenseServerCommand::class,
+            Console\LicenseClientStatusCommand::class,
+        ]);
     }
 
     /**
@@ -170,7 +175,7 @@ class LicenseServiceProvider extends ServiceProvider
             $this->loadViewsFrom(__DIR__ . '/../resources/views', 'license-client');
         }
 
-        // Load package web routes for interactive license management (/licente)
+        // Load package web routes for interactive license management (/licenta)
         // These routes are intentionally minimal and placed inside the package so
         // that the host application does not need to provide an interactive
         // license UI.
@@ -178,11 +183,6 @@ class LicenseServiceProvider extends ServiceProvider
         if (file_exists($routesPath)) {
             $this->loadRoutesFrom($routesPath);
         }
-
-        $this->commands([
-            Console\MakeLicenseServerCommand::class,
-            Console\LicenseClientStatusCommand::class,
-        ]);
 
         if (! $this->app->runningInConsole()) {
         // Enforce license on every HTTP request unless this app is the authority.
