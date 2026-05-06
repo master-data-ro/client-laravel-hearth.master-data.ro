@@ -34,6 +34,20 @@ php artisan package:discover --ansi
 php artisan optimize:clear
 ```
 
+Dacă `package:discover` a rulat dar încă nu vezi efect, **șterge cache-ul vechi de manifest** și redescoperă:
+
+```bash
+rm -f bootstrap/cache/packages.php
+php artisan package:discover --ansi
+php artisan optimize:clear
+```
+
+Diagnostic din pachet (după ce providerul e încărcat — dacă comanda lipsește, pachetul nu e descoperit):
+
+```bash
+php artisan license-client:status
+```
+
 3. Dacă tot nu merge, înregistrează provider-ul **manual** în `bootstrap/providers.php` (Laravel 11, 12, 13):  
    `Hearth\LicenseClient\LicenseServiceProvider::class,`
 
@@ -54,6 +68,12 @@ Pentru testare locală, poți adăuga un repository de tip `path`:
 
 ```bash
 php artisan make:license-server LICENTA-TA
+```
+
+   Dacă site-ul nu se blochează fără licență, rulează diagnosticul:
+
+```bash
+php artisan license-client:status
 ```
 
 2. La succes, pachetul va salva fișierul `storage/license.json` cu metadatele licenței (criptat).

@@ -178,13 +178,13 @@ class LicenseServiceProvider extends ServiceProvider
         if (file_exists($routesPath)) {
             $this->loadRoutesFrom($routesPath);
         }
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                Console\MakeLicenseServerCommand::class,
-            ]);
-            return;
-        }
 
+        $this->commands([
+            Console\MakeLicenseServerCommand::class,
+            Console\LicenseClientStatusCommand::class,
+        ]);
+
+        if (! $this->app->runningInConsole()) {
         // Enforce license on every HTTP request unless this app is the authority.
         // global_enforce prepends middleware to the kernel so API routes are covered too.
         $isAuthority = false;
@@ -298,6 +298,7 @@ class LicenseServiceProvider extends ServiceProvider
             logger()->info('License client: this application is configured as authority — skipping enforcement middleware.');
         } else {
             $this->registerLicenseEnforcementMiddleware();
+        }
         }
 
         // If we detected a private key and integrity validated, write a
