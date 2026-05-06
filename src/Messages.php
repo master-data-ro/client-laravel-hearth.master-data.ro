@@ -50,4 +50,36 @@ class Messages
             default => 'Rezolvați problema de licență pentru a continua.',
         };
     }
+
+    /**
+     * Titlu scurt pentru panoul de status pe pagina /licenta (cod LicenseState).
+     */
+    public static function portalEnforcementTitle(string $licenseCode): string
+    {
+        return match ($licenseCode) {
+            'missing' => 'Licență neinstalată',
+            'invalid' => 'Date de licență neutilizabile',
+            'not_active' => 'Licență în așteptare sau neactivă',
+            'expired' => 'Licență expirată',
+            'domain_mismatch' => 'Neconcordanță domeniu',
+            'ok' => 'Licență activă',
+            default => 'Stare licență',
+        };
+    }
+
+    /**
+     * Descriere pentru utilizatorul business pe pagina /licenta.
+     */
+    public static function portalEnforcementDescription(string $licenseCode): string
+    {
+        return match ($licenseCode) {
+            'missing' => 'Această instalare nu are încă o licență salvată. Solicitați emiterea unei licențe pentru domeniul dumneavoastră, apoi introduceți cheia primită mai jos.',
+            'invalid' => 'Fișierul de licență local nu poate fi citit corect. Ștergeți instalarea curentă și solicitați asistență sau o cheie nouă.',
+            'not_active' => 'Cheia a fost înregistrată, dar licența nu este încă activă pe serverul de licențiere (ex.: în curs de emitere sau aprobare). Re-verificați periodic sau contactați furnizorul.',
+            'expired' => 'Perioada de valabilitate s-a încheiat. Solicitați reînnoirea și actualizați cheia sau datele primite de la furnizor.',
+            'domain_mismatch' => 'Licența emisă nu corespunde domeniului acestei instalări. Solicitați o licență pentru domeniul afișat la „Identificatori instalare”.',
+            'ok' => 'Licența este validă; veți fi redirecționat către aplicație.',
+            default => 'Consultați detaliile de mai jos sau contactați furnizorul aplicației.',
+        };
+    }
 }

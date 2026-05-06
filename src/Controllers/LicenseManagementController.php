@@ -3,6 +3,7 @@
 namespace Hearth\LicenseClient\Controllers;
 
 use Hearth\LicenseClient\Encryption;
+use Hearth\LicenseClient\LicenseState;
 use Hearth\LicenseClient\Package;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -13,7 +14,17 @@ class LicenseManagementController extends Controller
     /**
      * Date comune pentru pagina /licenta.
      *
-     * @return array{license: ?array, error: ?string, isValid: bool, validUntil: ?string}
+     * @return array{
+     *   license: ?array,
+     *   error: ?string,
+     *   isValid: bool,
+     *   validUntil: ?string,
+     *   enforcement: array{ok: bool, code: string},
+     *   siteHost: string,
+     *   siteUrl: string,
+     *   fingerprintSummary: ?string,
+     *   licenseRequestEmail: ?string
+     * }
      */
     protected function licensePageData(): array
     {
@@ -22,6 +33,10 @@ class LicenseManagementController extends Controller
         $error = null;
         $isValid = false;
         $validUntil = null;
+        $appUrl = (string) (config('app.url') ?: env('APP_URL', ''));
+        $siteHost = (string) (parse_url($appUrl, PHP_URL_HOST) ?: gethostname());
+        $fingerprintSummary = $this->readFingerprintSummary();
+        $licenseRequestEmail = $this->normalizeRequestEmail(env('LICENSE_REQUEST_EMAIL'));
 
         if (! file_exists($path)) {
             return [
@@ -29,6 +44,11 @@ class LicenseManagementController extends Controller
                 'error' => null,
                 'isValid' => false,
                 'validUntil' => null,
+                'enforcement' => LicenseState::resolve(),
+                'siteHost' => $siteHost,
+                'siteUrl' => $appUrl,
+                'fingerprintSummary' => $fingerprintSummary,
+                'licenseRequestEmail' => $licenseRequestEmail,
             ];
         }
 
@@ -71,7 +91,46 @@ class LicenseManagementController extends Controller
             'error' => $error,
             'isValid' => $isValid,
             'validUntil' => $validUntil,
+            'enforcement' => LicenseState::resolve(),
+            'siteHost' => $siteHost,
+            'siteUrl' => $appUrl,
+            'fingerprintSummary' => $fingerprintSummary,
+            'licenseRequestEmail' => $licenseRequestEmail,
         ];
+    }
+
+    protected function readFingerprintSummary(): ?string
+    {
+        $fpPath = storage_path(Package::fingerprintFile());
+        if (! is_file($fpPath)) {
+            return null;
+        }
+
+        try {
+            $raw = file_get_contents($fpPath);
+            $j = json_decode((string) $raw, true);
+            if (! is_array($j) || empty($j['fingerprint'])) {
+                return null;
+            }
+            $fp = (string) $j['fingerprint'];
+            if (strlen($fp) > 48) {
+                return substr($fp, 0, 24) . '…' . substr($fp, -12);
+            }
+
+            return $fp;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function normalizeRequestEmail(?string $email): ?string
+    {
+        $email = $email !== null ? trim($email) : '';
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        return $email;
     }
 
     /**
@@ -99,7 +158,7 @@ class LicenseManagementController extends Controller
                     $decrypted = Encryption::decryptString($wrapper['payload']);
                     $existing = json_decode($decrypted, true);
                     $existingValid = $existing['data']['valid'] ?? false;
-                    if ($existingValid) {
+                    if ($existingValid && LicenseState::resolve()['ok']) {
                         return redirect()->route('license-client.licenta.index')
                             ->with('license_error', 'O licență validă este deja instalată și nu poate fi suprascrisă. Ștergeți-o manual mai întâi.');
                     }
@@ -207,7 +266,7 @@ class LicenseManagementController extends Controller
                 try {
                     $decrypted = Encryption::decryptString($wrapper['payload']);
                     $existing = json_decode($decrypted, true);
-                    if (! empty($existing['data']['valid'])) {
+                    if (! empty($existing['data']['valid']) && LicenseState::resolve()['ok']) {
                         return redirect()->route('license-client.licenta.index')
                             ->with('license_error', 'Licența este validă și nu poate fi ștearsă din interfață.');
                     }

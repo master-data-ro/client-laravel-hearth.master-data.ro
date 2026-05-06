@@ -10,11 +10,24 @@
 
 ## Instalare / Installation
 
-Adaugă în `composer.json` sau instalează direct din repository:
+**Versiune minimă recomandată: `^0.1.1`.** Dacă în `composer.json` ai **`^0.1.0`**, Composer poate instala exact **`0.1.0`**, unde **nu există** comanda `license-client:status` (și alte îmbunătățiri). Folosește:
 
 ```bash
-composer require hearth/license-client
+composer require hearth/license-client:^0.1.1
 ```
+
+sau, dacă pachetul e deja listat, schimbă constrângerea la `^0.1.1` (sau `^0.1.4`) și rulează:
+
+```bash
+composer update hearth/license-client
+php artisan package:discover --ansi
+```
+
+### Eroare: `There are no commands defined in the "license-client" namespace`
+
+1. Verifică versia instalată: `composer show hearth/license-client` (sau în `composer.lock` câmpul `version`).
+2. Dacă vezi **`0.1.0`**, actualizează constrângerea în **`composer.json`** la minim **`^0.1.1`**, apoi `composer update hearth/license-client`.
+3. Rulează **`php artisan package:discover`** și **`php artisan optimize:clear`**. Dacă providerul nu e descoperit, adaugă-l manual în `bootstrap/providers.php` (vezi mai jos).
 
 ### Dacă după `composer require` site-ul merge fără licență
 
@@ -42,13 +55,11 @@ php artisan package:discover --ansi
 php artisan optimize:clear
 ```
 
-Diagnostic din pachet (**hearth/license-client ≥ 0.1.1**; pe 0.1.0 comanda nu există — rulează `composer update hearth/license-client`):
+După actualizare, diagnosticul:
 
 ```bash
 php artisan license-client:status
 ```
-
-Dacă vezi `There are no commands defined in the "license-client" namespace`, pachetul din `vendor/` e încă vechi sau providerul nu e încărcat: actualizează la **0.1.1+**, apoi `php artisan package:discover` și eventual adaugă manual providerul în `bootstrap/providers.php`.
 
 ### 404 pe `/licenta` sau pagina UI nu se încarcă
 
@@ -84,7 +95,7 @@ php artisan license-client:status
 
 2. La succes, pachetul va salva fișierul `storage/license.json` cu metadatele licenței (criptat).
 
-3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): **`/licenta`** (sau `{prefix-din-APP_URL}/licenta` în subdirector) — status și activare cheie (accesibilă **doar când licența nu e validă**; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-ul rămâne doar în cod (`Package`).
+3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): **`/licenta`** (sau `{prefix-din-APP_URL}/licenta` în subdirector) — status, **solicitare licență** (e-mail precompletat dacă setezi opțional `LICENSE_REQUEST_EMAIL` în `.env`) și activare cheie (accesibilă **doar când licența nu e validă**; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-ul rămâne doar în cod (`Package`).
 
 4. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Aplicația răspunde cu HTTP 403 până există o licență validă în `storage/license.json` (excepții: consolă, mod autoritate, rute whitelist).
 
@@ -134,7 +145,7 @@ Client → Autoritate → Client → Middleware → Aplicație
 
 ## Notă enforcement
 
-- Middleware-ul de enforcement nu poate fi dezactivat. **Pagina de activare** (calea exactă: `Package::licenseActivationBasePath()`) este accesibilă **doar fără licență validă**; cu licență activă se redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
+- Middleware-ul de enforcement nu poate fi dezactivat. Fără licență validă, cererile **HTML** sunt **redirecționate** către pagina de activare (ruta `license-client.licenta.index`, calea: `Package::licenseActivationBasePath()`); cererile **`Accept: application/json`** primesc **403** JSON (`message`, `license_code`). Cu licență activă, `/licenta` redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
 
 ## Linkuri utile
 
