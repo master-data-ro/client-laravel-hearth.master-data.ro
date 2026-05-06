@@ -2,6 +2,12 @@
 
 [View on GitHub](https://github.com/master-data-ro/hearth-license-client)
 
+## Compatibilitate
+
+- **PHP:** `^8.2` (aliniat cu Laravel 11+).
+- **Laravel:** `11.x`, `12.x` și `13.x` (constrângeri explicite pe componentele `illuminate/*` folosite de pachet).
+- Auto-descoperire: `extra.laravel.providers` din `composer.json` al pachetului (același mecanism pe 11–13). Dacă `package:discover` nu rulează pe server, vezi secțiunea de troubleshooting de mai jos.
+
 ## Instalare / Installation
 
 Adaugă în `composer.json` sau instalează direct din repository:
@@ -9,6 +15,27 @@ Adaugă în `composer.json` sau instalează direct din repository:
 ```bash
 composer require hearth/license-client
 ```
+
+### Dacă după `composer require` site-ul merge fără licență
+
+Laravel încarcă provider-ul pachetului doar după **`php artisan package:discover`**. La tine Composer raportează scripturi care nu există, de exemplu:
+
+`You made a reference to a non-existent script @/usr/local/bin/php artisan package:discover`
+
+În acest caz descoperirea pachetelor **nu s-a rulat** — provider-ul nu e înregistrat și middleware-ul nu se activează.
+
+**Pași:**
+
+1. În `composer.json` al aplicației (nu al pachetului), la `scripts` → `post-autoload-dump`, înlocuiește `@/usr/local/bin/php` cu **`@php`** (sau calea reală către binarul PHP de pe server, ex. `/usr/bin/php`).
+2. Din directorul proiectului, rulează manual:
+
+```bash
+php artisan package:discover --ansi
+php artisan optimize:clear
+```
+
+3. Dacă tot nu merge, înregistrează provider-ul **manual** în `bootstrap/providers.php` (Laravel 11, 12, 13):  
+   `Hearth\LicenseClient\LicenseServiceProvider::class,`
 
 Pentru testare locală, poți adăuga un repository de tip `path`:
 
@@ -31,7 +58,7 @@ php artisan make:license-server LICENTA-TA
 
 2. La succes, pachetul va salva fișierul `storage/license.json` cu metadatele licenței (criptat).
 
-3. Middleware-ul `Hearth\\LicenseClient\\Middleware\\EnsureHasValidLicense` va fi adăugat automat în grupa `web` la boot. Aplicația va returna HTTP 403 până când există o licență validă.
+3. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Aplicația răspunde cu HTTP 403 până există o licență validă în `storage/license.json` (excepții: consolă, mod autoritate, rute whitelist).
 
 ## Cum funcționează (Principiul "ping-pong")
 
