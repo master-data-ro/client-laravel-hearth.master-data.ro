@@ -42,7 +42,7 @@ class Messages
     public static function blockHint(string $licenseCode): string
     {
         return match ($licenseCode) {
-            'missing' => 'Activați aplicația introducând cheia de licență în pagina dedicată.',
+            'missing' => 'Folosiți „Solicită licența pe domeniu” în pagina de licență sau `php artisan make:license-server` cu cheie aleatoare, apoi activați cu cheia emisă.',
             'invalid' => 'Ștergeți fișierul vechi (dacă există) și introduceți din nou o cheie validă.',
             'not_active' => 'Așteptați activarea sau reintroduceți cheia după ce a fost emisă.',
             'expired' => 'Obțineți o perioadă nouă de valabilitate și actualizați licența.',
@@ -73,11 +73,11 @@ class Messages
     public static function portalEnforcementDescription(string $licenseCode): string
     {
         return match ($licenseCode) {
-            'missing' => 'Această instalare nu are încă o licență salvată. Solicitați emiterea unei licențe pentru domeniul dumneavoastră, apoi introduceți cheia primită mai jos.',
+            'missing' => 'Această instalare nu are încă o licență salvată. Solicitarea pe domeniu: din pagina /licenta folosiți „Solicită licența pe domeniu” sau rulați `php artisan make:license-server` cu o cheie aleatoare; apoi activați cu cheia emisă.',
             'invalid' => 'Fișierul de licență local nu poate fi citit corect. Ștergeți instalarea curentă și solicitați asistență sau o cheie nouă.',
             'not_active' => 'Cheia a fost înregistrată, dar licența nu este încă activă pe serverul de licențiere (ex.: în curs de emitere sau aprobare). Re-verificați periodic sau contactați furnizorul.',
             'expired' => 'Perioada de valabilitate s-a încheiat. Solicitați reînnoirea și actualizați cheia sau datele primite de la furnizor.',
-            'domain_mismatch' => 'Licența emisă nu corespunde domeniului acestei instalări. Solicitați o licență pentru domeniul afișat la „Identificatori instalare”.',
+            'domain_mismatch' => 'Licența emisă nu corespunde domeniului acestei instalări. Solicitați o licență pentru domeniul afișat în secțiunea de solicitare (din APP_URL).',
             'ok' => 'Licența este validă; veți fi redirecționat către aplicație.',
             default => 'Consultați detaliile de mai jos sau contactați furnizorul aplicației.',
         };

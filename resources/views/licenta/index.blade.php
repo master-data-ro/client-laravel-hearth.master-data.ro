@@ -35,7 +35,7 @@
     <div class="mb-4 pb-lg-1">
         <h1 class="h3 fw-semibold text-dark mb-2">Management licență</h1>
         <p class="text-muted mb-0 col-lg-10">
-            Această pagină vă permite să solicitați emiterea unei licențe, să urmăriți starea instalării și să introduceți cheia primită de la furnizorul software.
+            <strong>Solicitarea</strong> pe domeniul din <code class="small">APP_URL</code> se poate face din această pagină (un clic) sau din SSH cu <code class="small">php artisan make:license-server</code>. La prima solicitare se generează automat o cheie provizorie; dacă există deja o cerere salvată, același buton <strong>actualizează stadiul</strong> de la autoritate. Introduceți cheia emisă definitiv în secțiunea de activare când o primiți.
         </p>
     </div>
 
@@ -86,7 +86,22 @@
                 </div>
                 <div class="card-body p-4">
                     <h3 class="h5 fw-semibold mb-2">{{ $enforcementTitle }}</h3>
-                    <p class="text-muted mb-4">{{ $enforcementDesc }}</p>
+                    <p class="text-muted mb-3">{{ $enforcementDesc }}</p>
+
+                    <div class="rounded-2 border bg-light px-3 py-2 mb-4 small">
+                        <span class="text-muted text-uppercase fw-semibold me-2">Stadiu</span>
+                        @if ($enforcementOk)
+                            <span class="text-success fw-semibold">Licență activă — aplicația poate rula.</span>
+                        @elseif ($hasLicense && ($pending || $inAprobare))
+                            <span class="text-primary fw-semibold">În așteptare la autoritate</span> — cererea pe domeniu este înregistrată; reîncercați „Actualizare stadiu” periodic.
+                        @elseif ($hasLicense && $serverValid && !$enforcementOk)
+                            <span class="text-warning fw-semibold">Neconcordanță locală</span> — datele de la server nu trec verificarea acestei instalări (ex. domeniu).
+                        @elseif ($hasLicense && !$serverValid)
+                            <span class="text-warning fw-semibold">Licență neactivă sau respinsă</span> — verificați mesajul de la server sau solicitați din nou.
+                        @else
+                            <span class="text-secondary fw-semibold">Fără cerere salvată</span> — folosiți butonul „Solicită licența pe domeniu” de mai jos (sau CLI).
+                        @endif
+                    </div>
 
                     @if ($hasLicense)
                         <div class="row g-3 mb-3">
@@ -120,12 +135,6 @@
                                     <i class="bi bi-check2-circle me-1"></i> Licența este instalată și acceptată de această aplicație.
                                 </div>
                             @else
-                                @if ($hasLicense)
-                                    <form method="POST" action="{{ route('license-client.licenta.verify') }}" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-primary btn-sm px-3"><i class="bi bi-arrow-repeat me-1"></i> Re-verificare la server</button>
-                                    </form>
-                                @endif
                                 @if ($hasLicense && (!$serverValid || $pending || $inAprobare || ($serverValid && !$enforcementOk)))
                                     <form method="POST" action="{{ route('license-client.licenta.destroy') }}" class="d-inline" onsubmit="return confirm('Ștergeți datele locale de licență? Veți putea introduce o altă cheie.');">
                                         @csrf
@@ -138,7 +147,7 @@
                     @else
                         <div class="rounded-2 border border-dashed p-4 text-center bg-light">
                             <i class="bi bi-inbox text-muted fs-2 d-block mb-2"></i>
-                            <p class="text-muted small mb-0">Nu există încă fișier de licență salvat pe acest server. După ce primiți cheia, folosiți secțiunea <strong>Activare cu cheie</strong> de mai jos.</p>
+                            <p class="text-muted small mb-0">Nu există încă cerere salvată. Apăsați <strong>Solicită licența pe domeniu</strong> în secțiunea următoare (sau folosiți CLI). După ce primiți cheia emisă, folosiți <strong>Activare cu cheie</strong>.</p>
                         </div>
                     @endif
                 </div>
@@ -153,22 +162,23 @@
                     <div class="lp-step">
                         <span class="lp-step-num">1</span>
                         <div>
-                            <div class="fw-semibold small">Solicitare</div>
-                            <div class="text-muted small">Trimiteți furnizorului datele instalării (domeniu, identificatori).</div>
+                            <div class="fw-semibold small">Solicitare pe domeniu</div>
+                            <div class="text-muted small mb-2">Din pagină: <strong>Solicită licența pe domeniu</strong> (domeniul din <code class="small">APP_URL</code>; cheie provizorie generată automat la prima solicitare).</div>
+                            <pre class="bg-light border rounded-2 p-2 small mb-0 user-select-all" style="white-space: pre-wrap; word-break: break-all;">php artisan make:license-server cheie-random</pre>
                         </div>
                     </div>
                     <div class="lp-step">
                         <span class="lp-step-num">2</span>
                         <div>
-                            <div class="fw-semibold small">Emitere</div>
-                            <div class="text-muted small">Primiți cheia de licență pe canalul agreat (e-mail, tichet).</div>
+                            <div class="fw-semibold small">Urmărire stadiu</div>
+                            <div class="text-muted small">Același buton <strong>Actualizare stadiu</strong> reîntreabă autoritatea cu cheia deja salvată. Stadiul apare în panoul din stânga.</div>
                         </div>
                     </div>
                     <div class="lp-step">
                         <span class="lp-step-num">3</span>
                         <div>
-                            <div class="fw-semibold small">Activare</div>
-                            <div class="text-muted small">Introduceți cheia mai jos; aplicația se deblochează după validare.</div>
+                            <div class="fw-semibold small">Activare cu cheia emisă</div>
+                            <div class="text-muted small">După primirea cheii definitive: <code class="small">make:license-server CHEIE</code> sau formularul <strong>Activare cu cheie</strong>.</div>
                         </div>
                     </div>
                 </div>
@@ -176,77 +186,65 @@
         </div>
     </div>
 
-    <div class="row g-4 mb-4">
-        <div class="col-lg-6">
-            <div class="lp-card h-100">
-                <div class="lp-card-header">
-                    <h2 class="h6 mb-0 fw-semibold text-uppercase text-muted" style="letter-spacing:.06em;">Identificatori instalare</h2>
+    <div class="lp-card mb-4">
+        <div class="lp-card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h2 class="h6 mb-0 fw-semibold text-uppercase text-muted" style="letter-spacing:.06em;">Solicitare pe domeniu</h2>
+            @if (! $enforcementOk)
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">Domeniu din APP_URL</span>
+            @endif
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-4 align-items-center">
+                <div class="col-lg-7">
+                    <p class="text-muted small mb-3 mb-lg-0">
+                        @if ($hasLicense && ($license['license_key'] ?? null))
+                            Există deja o <strong>cheie asociată</strong> acestei instalări. Apăsați butonul pentru a <strong>actualiza stadiul</strong> de la autoritate (același flux ca <code class="small">make:license-server</code> cu cheia salvată).
+                        @else
+                            Nu există cerere salvată. Un clic trimite către autoritate <strong>domeniul</strong> <code class="small">{{ $siteHost }}</code> și o <strong>cheie provizorie generată automat</strong> pe server.
+                        @endif
+                    </p>
                 </div>
-                <div class="card-body p-4">
-                    <p class="text-muted small mb-3">Includeți acest bloc în solicitarea către furnizor pentru emiterea sau activarea licenței.</p>
-                    <div class="lp-kpi mb-3">
-                        <div class="text-muted small fw-semibold text-uppercase mb-1">Domeniu</div>
-                            <div class="font-monospace fw-medium">{{ $siteHost }}</div>
-                    </div>
-                    @if ($siteUrl)
-                        <div class="lp-kpi mb-3">
-                            <div class="text-muted small fw-semibold text-uppercase mb-1">URL aplicație</div>
-                            <code class="small user-select-all text-break d-block">{{ $siteUrl }}</code>
-                        </div>
+                <div class="col-lg-5">
+                    @if ($enforcementOk)
+                        <p class="text-muted small mb-0">Licența este activă; solicitarea nu mai este necesară.</p>
+                    @else
+                        <form method="POST" action="{{ route('license-client.licenta.solicita') }}" class="d-grid gap-2">
+                            @csrf
+                            <button type="submit" class="btn btn-primary btn-lg py-3 shadow-sm">
+                                <i class="bi bi-send-check me-2"></i>
+                                @if ($hasLicense && ($license['license_key'] ?? null))
+                                    Actualizare stadiu de la autoritate
+                                @else
+                                    Solicită licența pe domeniu
+                                @endif
+                            </button>
+                        </form>
                     @endif
-                    @if ($fingerprintSummary)
-                        <div class="lp-kpi mb-3">
-                            <div class="text-muted small fw-semibold text-uppercase mb-1">Amprentă tehnică</div>
-                            <code class="small user-select-all text-break d-block">{{ $fingerprintSummary }}</code>
-                        </div>
-                    @endif
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="lp-copy-tech">
-                        <i class="bi bi-clipboard me-1"></i> Copiază textul pentru solicitare
-                    </button>
-                    <textarea id="lp-tech-raw" class="d-none" readonly>{{ $technicalBody }}</textarea>
                 </div>
             </div>
-        </div>
-        <div class="col-lg-6">
-            <div class="lp-card h-100">
-                <div class="lp-card-header">
-                    <h2 class="h6 mb-0 fw-semibold text-uppercase text-muted" style="letter-spacing:.06em;">Solicitare licență</h2>
+            <hr class="text-muted opacity-25 my-4">
+            <div class="row g-3 small text-muted">
+                <div class="col-md-4">
+                    <div class="text-uppercase fw-semibold mb-1">Domeniu trimis</div>
+                    <div class="font-monospace fw-medium text-dark">{{ $siteHost }}</div>
                 </div>
-                <div class="card-body p-4">
-                    <p class="text-muted small mb-3">
-                        Completați datele organizației, apoi deschideți mesajul precompletat către furnizor. Dacă nu aveți adresă dedicată, copiați identificatorii și folosiți canalul contractual (tichet, e-mail partener).
-                    </p>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted text-uppercase" for="lp-req-org">Organizație</label>
-                        <input type="text" class="form-control form-control-sm" id="lp-req-org" placeholder="Denumire legală sau departament" autocomplete="organization">
+                @if ($siteUrl)
+                    <div class="col-md-8">
+                        <div class="text-uppercase fw-semibold mb-1">APP_URL</div>
+                        <code class="user-select-all text-break d-block small">{{ $siteUrl }}</code>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted text-uppercase" for="lp-req-name">Persoană de contact</label>
-                            <input type="text" class="form-control form-control-sm" id="lp-req-name" placeholder="Nume prenume" autocomplete="name">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted text-uppercase" for="lp-req-email">E-mail contact</label>
-                            <input type="email" class="form-control form-control-sm" id="lp-req-email" placeholder="nume@companie.ro" autocomplete="email">
-                        </div>
+                @endif
+                @if ($fingerprintSummary)
+                    <div class="col-12">
+                        <div class="text-uppercase fw-semibold mb-1">Amprentă (opțional)</div>
+                        <code class="small user-select-all text-break d-block">{{ $fingerprintSummary }}</code>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted text-uppercase" for="lp-req-notes">Observații (opțional)</label>
-                        <textarea class="form-control form-control-sm" id="lp-req-notes" rows="2" placeholder="Nr. contract, proiect, perioadă dorită…"></textarea>
-                    </div>
-                    @if ($licenseRequestEmail)
-                        <button type="button" class="btn btn-primary w-100 mb-2" id="lp-open-mailto">
-                            <i class="bi bi-envelope-paper me-2"></i> Deschide solicitarea în clientul de e-mail
-                        </button>
-                        <p class="text-muted small mb-0">Destinatar: <strong>{{ $licenseRequestEmail }}</strong> (setat prin variabila <code class="small">LICENSE_REQUEST_EMAIL</code> în mediul serverului).</p>
-                    @else
-                        <button type="button" class="btn btn-outline-secondary w-100 mb-2" id="lp-open-mailto" disabled title="Setați LICENSE_REQUEST_EMAIL pentru deschidere automată">
-                            <i class="bi bi-envelope me-2"></i> E-mail către furnizor
-                        </button>
-                        <p class="text-muted small mb-0">
-                            Pentru buton activ, administratorul poate defini în <code class="small">.env</code> variabila <code class="small">LICENSE_REQUEST_EMAIL</code> cu adresa furnizorului. Până atunci, folosiți <strong>Copiază textul pentru solicitare</strong> și trimiteți manual.
-                        </p>
-                    @endif
+                @endif
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="lp-copy-tech">
+                        <i class="bi bi-clipboard me-1"></i> Copiază identificatori instalare
+                    </button>
+                    <textarea id="lp-tech-raw" class="d-none" readonly>{{ $technicalBody }}</textarea>
                 </div>
             </div>
         </div>
@@ -281,65 +279,27 @@
 @endsection
 
 @push('scripts')
-@php
-    $mailtoSubject = 'Solicitare licență — ' . config('app.name', 'Aplicație');
-@endphp
 <script>
 (function () {
     var raw = document.getElementById('lp-tech-raw');
-    var mailBtn = document.getElementById('lp-open-mailto');
-    var requestEmail = @json($licenseRequestEmail);
-
-    function buildBody() {
-        var org = document.getElementById('lp-req-org').value.trim();
-        var name = document.getElementById('lp-req-name').value.trim();
-        var email = document.getElementById('lp-req-email').value.trim();
-        var notes = document.getElementById('lp-req-notes').value.trim();
-        var lines = [];
-        lines.push('Bună ziua,');
-        lines.push('');
-        lines.push('Solicităm emiterea / activarea licenței pentru următoarea instalare:');
-        lines.push('');
-        if (org) lines.push('Organizație: ' + org);
-        if (name) lines.push('Persoană de contact: ' + name);
-        if (email) lines.push('E-mail: ' + email);
-        if (notes) lines.push('Observații: ' + notes);
-        lines.push('');
-        lines.push('— Date tehnice instalare —');
-        lines.push(raw.value.trim());
-        lines.push('');
-        lines.push('Cu stimă');
-        return lines.join('\n');
-    }
-
-    document.getElementById('lp-copy-tech').addEventListener('click', function () {
-        var text = buildBody();
+    var btn = document.getElementById('lp-copy-tech');
+    if (!btn || !raw) return;
+    btn.addEventListener('click', function () {
+        var text = raw.value.trim();
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(function () {
-                var btn = document.getElementById('lp-copy-tech');
                 var old = btn.innerHTML;
                 btn.innerHTML = '<i class="bi bi-check2 me-1"></i> Copiat';
                 setTimeout(function () { btn.innerHTML = old; }, 2000);
             });
         } else {
             raw.classList.remove('d-none');
-            raw.style.position = 'fixed';
-            raw.style.height = '1px';
-            raw.style.width = '1px';
-            raw.value = text;
+            raw.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0';
             raw.select();
             try { document.execCommand('copy'); } catch (e) {}
             raw.classList.add('d-none');
         }
     });
-
-    if (mailBtn && requestEmail) {
-        mailBtn.addEventListener('click', function () {
-            var subject = encodeURIComponent(@json($mailtoSubject));
-            var body = encodeURIComponent(buildBody());
-            window.location.href = 'mailto:' + encodeURIComponent(requestEmail) + '?subject=' + subject + '&body=' + body;
-        });
-    }
 })();
 </script>
 @endpush

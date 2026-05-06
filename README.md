@@ -89,7 +89,8 @@ Această comandă există **din v0.1.0** și rămâne comanda principală de ver
 
 | Acțiune | Comandă |
 |--------|---------|
-| Verifică cheia la Hearth și salvează `storage/license.json` | `php artisan make:license-server CHEIA-TA` |
+| **Prima solicitare pe domeniu** (cheie provizorie aleatoare; trimite `APP_URL` → host către Hearth) | `php artisan make:license-server CHEIE-ALEATOARE` |
+| Verificare / salvare cu **cheia emisă** de autoritate | `php artisan make:license-server CHEIA-DEFINITIVA` |
 | Afișează licența salvată (decrypt, JSON în consolă) | `php artisan make:license-server --show` |
 
 Opțional: `--passphrase=` pentru derivarea cheii de criptare (implicit se folosește `APP_KEY` / fluxul din `Encryption`).
@@ -101,25 +102,27 @@ Opțional: `--passphrase=` pentru derivarea cheii de criptare (implicit se folos
 
 ## Utilizare / Usage
 
-1. Validează o cheie și salvează local (contactează autoritatea):
+1. **Prima solicitare:** pe server, din rădăcina proiectului, rulează `php artisan make:license-server` cu o **cheie aleatoare** (orice șir unic); autoritatea primește **domeniul** din `APP_URL`. **După emitere**, aceeași comandă cu **cheia primită** salvează licența definitivă.
 
 ```bash
-php artisan make:license-server LICENTA-TA
+php artisan make:license-server cheie-random
+# … după ce primiți cheia de la Hearth / furnizor:
+php artisan make:license-server CHEIA-EMISA
 ```
 
    Dacă site-ul nu se blochează fără licență și ai **≥ 0.1.1**, rulează **`php artisan license-client:status`**. Pe **0.1.0** verifică `package:discover`, `bootstrap/providers.php` și existența `storage/license.json` manual sau cu `make:license-server --show`.
 
 2. La succes, pachetul salvează `storage/license.json` (criptat).
 
-3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): ruta **`/licenta`** (sau cu prefix din `APP_URL` în subdirector) — disponibilă în **versiunile recente** ale pachetului; pe **0.1.0** folosiți în principal CLI-ul `make:license-server`. Pagina include status, **solicitare licență** (e-mail precompletat dacă setezi `LICENSE_REQUEST_EMAIL` în `.env`) și activare cheie (**doar** când licența nu e validă; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-urile rămân în cod (`Package`).
+3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): ruta **`/licenta`** (sau cu prefix din `APP_URL`) — în **versiunile recente**; pe **0.1.0** folosiți CLI-ul. **Solicitare pe domeniu:** buton care trimite `POST /licenta/solicita` (cheie provizorie generată pe server dacă nu există încă una salvată; altfel reîntreabă autoritatea pentru **stadiu**). Alternativ: `make:license-server` + cheie aleatoare din SSH. **Activare** cu cheia emisă: formular sau din nou comanda. Nu există link public către portalul autorității; endpoint-urile rămân în cod (`Package`).
 
 4. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Fără licență validă, cererile **HTML** sunt redirecționate spre pagina de activare; răspunsurile **JSON** pot primi **403** cu `license_code` (excepții: consolă, mod autoritate, rute whitelist — vezi [Notă enforcement](#notă-enforcement)).
 
 ## Cum funcționează (Principiul "ping-pong")
 
-1. **Clientul** (aplicația ta) trimite cheia de licență și domeniul către autoritate (hearth.master-data.ro) folosind comanda:
+1. **Clientul** trimite către autoritate (hearth.master-data.ro) **domeniul** (din `APP_URL`) și o **cheie** — la prima solicitare cheia poate fi **aleatoare**; după emitere se folosește cheia primită:
    ```bash
-   php artisan make:license-server YOUR-LICENSE-KEY
+   php artisan make:license-server CHEIE-ALEATOARE-SAU-EMISA
    ```
 2. **Autoritatea** verifică cheia și domeniul:
    - Dacă licența este validă, răspunde cu un payload semnat și criptat, ce conține metadatele licenței.
@@ -143,7 +146,8 @@ Flux simplificat:
 
 Client → Autoritate → Client → Middleware → Aplicație
 
-- Cerere licență   →   Răspuns semnat   →   Salvare locală   →   Enforcement   →   Acces
+- **Prima cerere (domeniu):** `make:license-server` + cheie provizorie (SSH) → răspuns semnat (pending/valid) → salvare locală dacă se returnează payload
+- **Activare finală:** aceeași comandă sau UI cu cheia emisă → enforcement → acces
 
 ## Detalii suplimentare
 
