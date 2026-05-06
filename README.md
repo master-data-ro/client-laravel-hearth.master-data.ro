@@ -25,9 +25,13 @@ php artisan package:discover --ansi
 
 ### Eroare: `There are no commands defined in the "license-client" namespace`
 
+În **`hearth/license-client` v0.1.0** nu există namespace-ul Artisan `license-client:` — este normal. Comenzile din pachet sunt doar cele legate de **`make:license-server`** (`MakeLicenseServerCommand`). Folosește tabelul din secțiunea **Comenzi Artisan: make:license-server** mai jos.
+
+Dacă vrei și **`php artisan license-client:status`** (diagnostic), actualizează la **≥ 0.1.1** (vezi [Instalare](#instalare--installation)).
+
 1. Verifică versia instalată: `composer show hearth/license-client` (sau în `composer.lock` câmpul `version`).
-2. Dacă vezi **`0.1.0`**, actualizează constrângerea în **`composer.json`** la minim **`^0.1.1`**, apoi `composer update hearth/license-client`.
-3. Rulează **`php artisan package:discover`** și **`php artisan optimize:clear`**. Dacă providerul nu e descoperit, adaugă-l manual în `bootstrap/providers.php` (vezi mai jos).
+2. Dacă rămâi pe **`0.1.0`**, nu rula `license-client:*`; folosește doar `make:license-server`. Pentru comenzi `license-client:*`, schimbă constrângerea la **`^0.1.1`** și `composer update hearth/license-client`.
+3. După update: **`php artisan package:discover`** și **`php artisan optimize:clear`**. Dacă providerul nu e descoperit, adaugă-l manual în `bootstrap/providers.php` (vezi mai jos).
 
 ### Dacă după `composer require` site-ul merge fără licență
 
@@ -55,7 +59,7 @@ php artisan package:discover --ansi
 php artisan optimize:clear
 ```
 
-După actualizare, diagnosticul:
+După actualizare la **≥ 0.1.1**, poți rula diagnosticul:
 
 ```bash
 php artisan license-client:status
@@ -64,7 +68,7 @@ php artisan license-client:status
 ### 404 pe `/licenta` sau pagina UI nu se încarcă
 
 1. **Cache rute:** dacă rulezi `php artisan route:cache`, rutele pachetului trebuie incluse în acel cache. După `composer update` / prima instalare a pachetului, un cache vechi poate să nu conțină rutele — rulează **`php artisan route:clear`** (sau regenerează `route:cache` după ce pachetul e instalat).
-2. **Subdirector:** dacă aplicația e servită sub un path (ex. `https://exemplu.ro/myapp`), setează **`APP_URL`** (și `config('app.url')`) la URL-ul complet **cu** acel path. Rutele UI se înregistrează atunci la `…/myapp/licenta` (nu la rădăcină domeniului). Verifică cu `php artisan license-client:status` câmpul „Cale UI activare licență”.
+2. **Subdirector:** dacă aplicația e servită sub un path (ex. `https://exemplu.ro/myapp`), setează **`APP_URL`** (și `config('app.url')`) la URL-ul complet **cu** acel path. Rutele UI se înregistrează atunci la `…/myapp/licenta` (nu la rădăcină domeniului). Cu pachet **≥ 0.1.1**, comanda `php artisan license-client:status` afișează și „Cale UI activare licență”.
 3. **Provider manual:** dacă tot nu merge, înregistrează provider-ul în `bootstrap/providers.php` (Laravel 11, 12, 13):  
    `Hearth\LicenseClient\LicenseServiceProvider::class,`
 
@@ -79,25 +83,37 @@ Pentru testare locală, poți adăuga un repository de tip `path`:
 ]
 ```
 
+## Comenzi Artisan: make:license-server
+
+Această comandă există **din v0.1.0** și rămâne comanda principală de verificare / salvare din CLI:
+
+| Acțiune | Comandă |
+|--------|---------|
+| Verifică cheia la Hearth și salvează `storage/license.json` | `php artisan make:license-server CHEIA-TA` |
+| Afișează licența salvată (decrypt, JSON în consolă) | `php artisan make:license-server --show` |
+
+Opțional: `--passphrase=` pentru derivarea cheii de criptare (implicit se folosește `APP_KEY` / fluxul din `Encryption`).
+
+## Comenzi `license-client:*` (doar ≥ 0.1.1)
+
+- **`php artisan license-client:status`** — diagnostic (manifest, provider, cache rute, cale UI `/licenta`).
+- Alte îmbunătățiri (UI `/licenta`, redirect enforcement etc.) depind de versiune; vezi changelog / tag-uri pe GitHub.
+
 ## Utilizare / Usage
 
-1. Rulează comanda artisan pentru a valida o cheie de licență (va contacta autoritatea):
+1. Validează o cheie și salvează local (contactează autoritatea):
 
 ```bash
 php artisan make:license-server LICENTA-TA
 ```
 
-   Dacă site-ul nu se blochează fără licență, rulează diagnosticul:
+   Dacă site-ul nu se blochează fără licență și ai **≥ 0.1.1**, rulează **`php artisan license-client:status`**. Pe **0.1.0** verifică `package:discover`, `bootstrap/providers.php` și existența `storage/license.json` manual sau cu `make:license-server --show`.
 
-```bash
-php artisan license-client:status
-```
+2. La succes, pachetul salvează `storage/license.json` (criptat).
 
-2. La succes, pachetul va salva fișierul `storage/license.json` cu metadatele licenței (criptat).
+3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): ruta **`/licenta`** (sau cu prefix din `APP_URL` în subdirector) — disponibilă în **versiunile recente** ale pachetului; pe **0.1.0** folosiți în principal CLI-ul `make:license-server`. Pagina include status, **solicitare licență** (e-mail precompletat dacă setezi `LICENSE_REQUEST_EMAIL` în `.env`) și activare cheie (**doar** când licența nu e validă; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-urile rămân în cod (`Package`).
 
-3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): **`/licenta`** (sau `{prefix-din-APP_URL}/licenta` în subdirector) — status, **solicitare licență** (e-mail precompletat dacă setezi opțional `LICENSE_REQUEST_EMAIL` în `.env`) și activare cheie (accesibilă **doar când licența nu e validă**; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-ul rămâne doar în cod (`Package`).
-
-4. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Aplicația răspunde cu HTTP 403 până există o licență validă în `storage/license.json` (excepții: consolă, mod autoritate, rute whitelist).
+4. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Fără licență validă, cererile **HTML** sunt redirecționate spre pagina de activare; răspunsurile **JSON** pot primi **403** cu `license_code` (excepții: consolă, mod autoritate, rute whitelist — vezi [Notă enforcement](#notă-enforcement)).
 
 ## Cum funcționează (Principiul "ping-pong")
 
