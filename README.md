@@ -98,7 +98,23 @@ Opțional: `--passphrase=` pentru derivarea cheii de criptare (implicit se folos
 ## Comenzi `license-client:*` (doar ≥ 0.1.1)
 
 - **`php artisan license-client:status`** — diagnostic (manifest, provider, cache rute, cale UI `/licenta`).
-- Alte îmbunătățiri (UI `/licenta`, redirect enforcement etc.) depind de versiune; vezi changelog / tag-uri pe GitHub.
+- **`php artisan license-client:probe`** — verificare **one-shot** fără browser: reachability **JWKS**, **PEM**, **POST /api/verify** (corp de probă), versiunea din `composer.json` a pachetului, existența `storage/license.json`, rezumat `LicenseState`, calea efectivă `Package::licenseActivationBasePath()` (inclusiv prefix din `APP_URL`). Pentru **CI / deploy**, folosește **`--json`** (ieșire JSON stabilă pe stdout).
+- **`php artisan license-client:sync`** — re-verifică **licența salvată** la autoritate și rescrie `storage/license.json` (fără cheie în argument; dacă nu există fișier, nu face nimic). Folosit și de **scheduler**.
+- Alte îmbunătățiri depind de versiune; vezi changelog / tag-uri pe GitHub.
+
+## Scheduler (cron la 5 minute)
+
+Pachetul înregistrează automat în Laravel **`license-client:sync --quiet-sync`** la **`everyFiveMinutes()`**, cu **`withoutOverlapping(5)`** (minute), ca licența dezactivată la autoritate să se reflecte la client fără acțiune manuală.
+
+Pe server trebuie rulat **scheduler-ul Laravel** (o dată pe minut), de exemplu:
+
+```bash
+* * * * * cd /calea/proiectului && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Pe **instalare autoritate** (același host ca `Package::authorityUrl()` sau există `storage/keys/private.pem`), comanda **nu** apelează autoritatea (iese imediat).
+
+Manual: `php artisan license-client:sync` (mesaje în consolă) sau `php artisan license-client:sync --quiet-sync`.
 
 ## Utilizare / Usage
 
@@ -165,7 +181,44 @@ Client → Autoritate → Client → Middleware → Aplicație
 
 ## Notă enforcement
 
-- Middleware-ul de enforcement nu poate fi dezactivat. Fără licență validă, cererile **HTML** sunt **redirecționate** către pagina de activare (ruta `license-client.licenta.index`, calea: `Package::licenseActivationBasePath()`); cererile **`Accept: application/json`** primesc **403** JSON (`message`, `license_code`). Cu licență activă, `/licenta` redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
+- Middleware-ul de enforcement nu poate fi dezactivat. Fără licență validă, cererile **HTML** sunt **redirecționate** către pagina de activare (ruta `license-client.licenta.index`, calea: `Package::licenseActivationBasePath()`); cererile care **așteaptă JSON** (`Accept: application/json` / `expectsJson()`, tipic API-uri, **Inertia**, unele SPA) primesc **403** cu corp și headere stabile (vezi mai jos). Cu licență activă, `/licenta` redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
+
+### Contract stabil: HTTP 403 JSON (blocare licență)
+
+Pentru frontend-uri **SPA / Inertia / API**, tratați uniform răspunsul **403**:
+
+**Corp JSON** (câmpurile `message` și `license_code` sunt mereu prezente):
+
+```json
+{
+  "message": "…",
+  "license_code": "missing"
+}
+```
+
+- **`license_code`**: cod intern al stării (ex. `missing`, `invalid`, `not_active`, `expired`, `domain_mismatch`) — același cod ca în `LicenseState::resolve()['code']`.
+- **`retry_after`**: opțional; număr întreg de secunde (ex. rate limiting viitor). Dacă lipsește din corp, nu presupuneți retry.
+
+**Headere HTTP** (comune cu răspunsurile de tip „health” unde se expune starea):
+
+| Header | Rol |
+|--------|-----|
+| **`X-License-Code`** | Același cod ca `license_code` din corp (comod pentru interceptor fără parsare JSON). |
+| **`X-License-Ok`** | `0` la blocare. |
+
+Constantele din cod: `Hearth\LicenseClient\Package::HEADER_LICENSE_CODE`, `Package::HEADER_LICENSE_OK`. Helper corp: `Package::licenseForbiddenJsonBody()`.
+
+Dacă în viitor apare **`retry_after`** în corp, un client poate folosi și header-ul standard **`Retry-After`** când este trimis de server (alinieri viitoare); până atunci, bazați-vă pe corpul JSON de mai sus.
+
+## Testare (pachet)
+
+În monorepo-ul pachetului, după `composer install`:
+
+```bash
+composer test
+```
+
+Se folosește **Orchestra Testbench** și PHPUnit. În **`phpunit.xml`** este setat **`HEARTH_SKIP_JWKS_BOOT=1`** ca pachetul să nu depindă de JWKS live la boot în timpul testelor (util și în CI pentru suite rapide și deterministe), iar **`APP_KEY`** în format **`base64:…`** (32 octeți) pentru ca cifrarea Laravel din timpul request-urilor de test să fie validă. Pentru integrare reală contra autorității, rulați **`license-client:probe`** în mediul țintă.
 
 ## Linkuri utile
 

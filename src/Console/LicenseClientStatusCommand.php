@@ -55,6 +55,8 @@ class LicenseClientStatusCommand extends Command
 
         $this->line('Cale UI activare licență: <info>' . Package::licenseActivationBasePath() . '</> (din <comment>APP_URL</> / <comment>app.url</>).');
 
+        $this->line('Sincronizare automată: pachetul înregistrează <info>license-client:sync</info> la <info>everyFiveMinutes()</info> (reîncarcă licența de la autoritate). Necesită ca <info>schedule:run</info> să fie în cron — vezi README.');
+
         if ($this->laravel->routesAreCached()) {
             $this->warn('Cache rute: <fg=yellow>ACTIV</>. Dacă ai instalat/actualizat pachetul după <info>route:cache</info>, rutele UI pot lipsi — rulează <info>php artisan route:clear</info> sau regenerează cache-ul.');
         }
@@ -64,6 +66,10 @@ class LicenseClientStatusCommand extends Command
 
         $this->newLine();
         $this->line('După remediere: <info>php artisan optimize:clear</info> și reîncarcă site-ul în browser.');
+
+        $this->newLine();
+        $this->comment('Verificare one-shot (reachability JWKS/PEM/verify, versiune pachet, fișier licență, LicenseState, cale /licenta):');
+        $this->line('  <info>php artisan license-client:probe</info>  sau pentru CI: <info>php artisan license-client:probe --json</info>');
 
         return 0;
     }

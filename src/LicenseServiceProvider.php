@@ -2,6 +2,7 @@
 
 namespace Hearth\LicenseClient;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
@@ -16,6 +17,8 @@ class LicenseServiceProvider extends ServiceProvider
         $this->commands([
             Console\MakeLicenseServerCommand::class,
             Console\LicenseClientStatusCommand::class,
+            Console\LicenseClientSyncCommand::class,
+            Console\LicenseClientProbeCommand::class,
         ]);
     }
 
@@ -29,6 +32,10 @@ class LicenseServiceProvider extends ServiceProvider
      */
     protected function verifyBundledKeyAgainstJwks()
     {
+        if (filter_var(env('HEARTH_SKIP_JWKS_BOOT', false), FILTER_VALIDATE_BOOLEAN)) {
+            return;
+        }
+
         $authority = Package::authorityUrl();
         $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
 
@@ -211,7 +218,7 @@ class LicenseServiceProvider extends ServiceProvider
         // Uses APP_URL path prefix when the app runs in a subdirectory so /licenta matches requests.
         $this->registerLicenseWebRoutes();
 
-        if (! $this->app->runningInConsole()) {
+        if (! $this->app->runningInConsole() || $this->app->runningUnitTests()) {
         // Enforce license on every HTTP request unless this app is the authority.
         // global_enforce prepends middleware to the kernel so API routes are covered too.
         $isAuthority = false;
@@ -405,5 +412,11 @@ class LicenseServiceProvider extends ServiceProvider
         } catch (\Throwable $e) {
             // ignore if route registration fails
         }
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('license-client:sync --quiet-sync')
+                ->everyFiveMinutes()
+                ->withoutOverlapping(5);
+        });
     }
 }

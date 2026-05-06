@@ -8,6 +8,11 @@ namespace Hearth\LicenseClient;
  */
 final class Package
 {
+    /** Header pe răspunsuri 403 JSON (blocare licență) — contract stabil pentru SPA. */
+    public const HEADER_LICENSE_CODE = 'X-License-Code';
+
+    public const HEADER_LICENSE_OK = 'X-License-Ok';
+
     // Fixed authority and endpoints
     private const AUTHORITY_URL = 'https://hearth.master-data.ro';
     private const VERIFY_ENDPOINT = '/api/verify';
@@ -116,6 +121,25 @@ final class Package
         $base = self::licenseActivationBasePath();
 
         return $path === $base || str_starts_with($path, $base . '/');
+    }
+
+    /**
+     * Corp JSON stabil pentru HTTP 403 când licența nu permite accesul (SPA / Inertia).
+     * Câmpul `retry_after` este opțional (ex. rate limiting viitor).
+     *
+     * @return array{message: string, license_code: string, retry_after?: int}
+     */
+    public static function licenseForbiddenJsonBody(string $message, string $licenseCode, ?int $retryAfter = null): array
+    {
+        $body = [
+            'message' => $message,
+            'license_code' => $licenseCode,
+        ];
+        if ($retryAfter !== null) {
+            $body['retry_after'] = $retryAfter;
+        }
+
+        return $body;
     }
 
     /**

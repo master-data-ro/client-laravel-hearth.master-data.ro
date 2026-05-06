@@ -2,12 +2,12 @@
 
 namespace Hearth\LicenseClient\Controllers;
 
+use Hearth\LicenseClient\AuthorityLicenseSync;
 use Hearth\LicenseClient\Encryption;
 use Hearth\LicenseClient\LicenseState;
 use Hearth\LicenseClient\Package;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\Http;
 
 class LicenseManagementController extends Controller
 {
@@ -100,25 +100,7 @@ class LicenseManagementController extends Controller
      */
     protected function resolveExistingLicenseKey(): ?string
     {
-        $path = storage_path('license.json');
-        if (! is_file($path)) {
-            return null;
-        }
-
-        try {
-            $raw = file_get_contents($path);
-            $wrapper = json_decode($raw, true);
-            if (! is_array($wrapper) || empty($wrapper['payload'])) {
-                return null;
-            }
-            $decrypted = Encryption::decryptString($wrapper['payload']);
-            $license = json_decode($decrypted, true);
-            $key = $license['license_key'] ?? null;
-
-            return is_string($key) && $key !== '' ? $key : null;
-        } catch (\Throwable $e) {
-            return null;
-        }
+        return AuthorityLicenseSync::resolveStoredLicenseKey();
     }
 
     protected function readFingerprintSummary(): ?string
@@ -169,7 +151,9 @@ class LicenseManagementController extends Controller
             ? 'Actualizare de la autoritate.'
             : 'Prima solicitare pe domeniu (cheie provizorie generată automat).';
 
-        return $this->verifyKeyWithAuthorityAndSave($key, $prefix);
+        $hadExisting = ($existing !== null && $existing !== '');
+
+        return $this->verifyKeyWithAuthorityAndSave($key, $prefix, $hadExisting);
     }
 
     /**
@@ -180,114 +164,26 @@ class LicenseManagementController extends Controller
         $request->validate(['license_key' => 'required|string']);
         $key = trim($request->input('license_key'));
 
-        return $this->verifyKeyWithAuthorityAndSave($key, null);
+        return $this->verifyKeyWithAuthorityAndSave($key, null, false);
     }
 
     /**
      * Verifică cheia la autoritate, verifică semnătura PEM și salvează storage/license.json.
      *
      * @param  string|null  $successPrefix  Prefix opțional pentru mesajul de succes (ex. solicitare din UI).
+     * @param  bool  $skipActiveLocalOverwriteGuard  true = reîncarcă de la autoritate chiar dacă licența locală e OK (verify, cron).
      */
-    protected function verifyKeyWithAuthorityAndSave(string $key, ?string $successPrefix): \Illuminate\Http\RedirectResponse
+    protected function verifyKeyWithAuthorityAndSave(string $key, ?string $successPrefix, bool $skipActiveLocalOverwriteGuard): \Illuminate\Http\RedirectResponse
     {
-        $existingPath = storage_path('license.json');
+        $result = AuthorityLicenseSync::sync($key, $skipActiveLocalOverwriteGuard, $successPrefix);
 
-        if (file_exists($existingPath)) {
-            try {
-                $raw = file_get_contents($existingPath);
-                $wrapper = json_decode($raw, true);
-                if (is_array($wrapper) && ! empty($wrapper['payload'])) {
-                    $decrypted = Encryption::decryptString($wrapper['payload']);
-                    $existing = json_decode($decrypted, true);
-                    $existingValid = $existing['data']['valid'] ?? false;
-                    if ($existingValid && LicenseState::resolve()['ok']) {
-                        return redirect()->route('license-client.licenta.index')
-                            ->with('license_error', 'O licență validă este deja instalată și nu poate fi suprascrisă. Ștergeți-o manual mai întâi.');
-                    }
-                }
-            } catch (\Throwable $e) {
-                // dacă fișierul este corupt, permitem suprascrierea
-            }
-        }
-
-        $authority = Package::authorityUrl();
-        if (empty($authority)) {
+        if (! $result['ok']) {
             return redirect()->route('license-client.licenta.index')
-                ->with('license_error', 'Autoritatea nu este configurată; nu se poate verifica licența online.');
+                ->with('license_error', $result['error'] ?? 'Eroare la verificarea licenței.');
         }
 
-        $verifyPath = Package::verifyEndpoint();
-        $verifyUrl = rtrim($authority, '/') . '/' . ltrim($verifyPath, '/');
-
-        try {
-            $resp = Http::timeout(Package::remoteTimeout())
-                ->post($verifyUrl, [
-                    'license_key' => $key,
-                    'domain' => parse_url(config('app.url') ?? env('APP_URL', ''), PHP_URL_HOST) ?: gethostname(),
-                ]);
-            $json = $resp->json();
-
-            if (empty($json['data']) || ! isset($json['signature'])) {
-                return redirect()->route('license-client.licenta.index')->with('license_error', 'Răspuns invalid de la autoritate (așteptat data+signature).');
-            }
-
-            $data = $json['data'];
-            $signature = base64_decode($json['signature']);
-
-            try {
-                $pemResp = Http::timeout(Package::remoteTimeout())->get(rtrim($authority, '/') . '/' . ltrim(Package::pemEndpoint(), '/'));
-                if (! $pemResp->successful()) {
-                    return redirect()->route('license-client.licenta.index')->with('license_error', 'Nu am putut prelua cheia publică de la autoritate: HTTP ' . $pemResp->status());
-                }
-                $pem = $pemResp->body();
-            } catch (\Throwable $e) {
-                return redirect()->route('license-client.licenta.index')->with('license_error', 'Eroare la descărcarea cheii publice: ' . $e->getMessage());
-            }
-
-            $payloadJson = json_encode($data);
-            $pub = openssl_pkey_get_public($pem);
-            if ($pub === false) {
-                return redirect()->route('license-client.licenta.index')->with('license_error', 'Cheia publică primită de la autoritate este invalidă.');
-            }
-
-            $ok = openssl_verify($payloadJson, $signature, $pub, OPENSSL_ALGO_SHA256) === 1;
-            openssl_free_key($pub);
-
-            if (! $ok) {
-                return redirect()->route('license-client.licenta.index')->with('license_error', 'Verificarea semnăturii a eșuat.');
-            }
-
-            $payload = [
-                'license_key' => $key,
-                'domain' => parse_url(config('app.url') ?? env('APP_URL', ''), PHP_URL_HOST) ?: gethostname(),
-                'data' => $data,
-                'fetched_at' => now()->toIso8601String(),
-                'authority' => $authority,
-            ];
-
-            try {
-                $plaintext = json_encode($payload, JSON_UNESCAPED_SLASHES);
-                $encrypted = Encryption::encryptString($plaintext);
-                $wrapper = json_encode([
-                    'encrypted' => true,
-                    'version' => 1,
-                    'payload' => $encrypted,
-                ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-                file_put_contents($existingPath, $wrapper);
-                $serverMessage = $data['message'] ?? null;
-                $base = 'Licența a fost verificată și salvată local.';
-                if ($successPrefix !== null && $successPrefix !== '') {
-                    $base = trim($successPrefix) . ' ' . $base;
-                }
-                $msg = $base . ($serverMessage ? ' Mesaj server: ' . $serverMessage : '');
-
-                return redirect()->route('license-client.licenta.index')->with('license_success', $msg);
-            } catch (\Throwable $e) {
-                return redirect()->route('license-client.licenta.index')->with('license_error', 'Eroare la salvarea licenței: ' . $e->getMessage());
-            }
-        } catch (\Throwable $e) {
-            return redirect()->route('license-client.licenta.index')->with('license_error', 'Eroare la verificarea la autoritate: ' . $e->getMessage());
-        }
+        return redirect()->route('license-client.licenta.index')
+            ->with('license_success', $result['success'] ?? 'Licența a fost verificată și salvată local.');
     }
 
     /**
@@ -337,6 +233,6 @@ class LicenseManagementController extends Controller
                 ->with('license_error', 'Nu există nicio licență instalată sau fișierul este corupt.');
         }
 
-        return $this->verifyKeyWithAuthorityAndSave($key, null);
+        return $this->verifyKeyWithAuthorityAndSave($key, null, true);
     }
 }

@@ -171,7 +171,7 @@
                         <span class="lp-step-num">2</span>
                         <div>
                             <div class="fw-semibold small">Urmărire stadiu</div>
-                            <div class="text-muted small">Același buton <strong>Actualizare stadiu</strong> reîntreabă autoritatea cu cheia deja salvată. Stadiul apare în panoul din stânga.</div>
+                            <div class="text-muted small">Același buton <strong>Actualizare stadiu</strong> reîntreabă autoritatea cu cheia deja salvată. În fundal, dacă aveți <code class="small">schedule:run</code> în cron, pachetul rulează <code class="small">license-client:sync</code> la fiecare 5 minute. Stadiul apare în panoul din stânga.</div>
                         </div>
                     </div>
                     <div class="lp-step">

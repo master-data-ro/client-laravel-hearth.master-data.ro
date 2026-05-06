@@ -14,7 +14,7 @@ class EnsureHasValidLicense
     {
         // Allow in console (artisan) so CLI tasks continue to work. For web
         // requests, do not allow exceptions: block until a valid license exists.
-        if (app()->runningInConsole()) {
+        if (app()->runningInConsole() && ! app()->runningUnitTests()) {
             return $next($request);
         }
 
@@ -59,10 +59,12 @@ class EnsureHasValidLicense
             $message = Messages::get($messageKey);
 
             if ($request->expectsJson()) {
-                return response()->json([
-                    'message' => $message,
-                    'license_code' => $state['code'],
-                ], 403);
+                $body = Package::licenseForbiddenJsonBody($message, $state['code']);
+
+                return response()->json($body, 403, [
+                    Package::HEADER_LICENSE_CODE => $state['code'],
+                    Package::HEADER_LICENSE_OK => '0',
+                ]);
             }
 
             return redirect()->route('license-client.licenta.index')
