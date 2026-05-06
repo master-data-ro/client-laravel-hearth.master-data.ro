@@ -2,6 +2,7 @@
 
 namespace Hearth\LicenseClient\Console;
 
+use Hearth\LicenseClient\Package;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -45,7 +46,7 @@ class MakeLicenseServerCommand extends Command
 
         $this->info('Verifying license key against hearth.master-data.ro...');
 
-        $authority = config('license.authority', 'https://hearth.master-data.ro');
+        $authority = Package::authorityUrl();
 
         // determine domain (host) from APP_URL
         $appUrl = config('app.url') ?? env('APP_URL', '');

@@ -9,7 +9,7 @@ class LicenseServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        // No publishable or mergeable config: package is locked down by design.
+        $this->mergeConfigFrom(__DIR__ . '/../config/license.php', 'license');
     }
 
     /**
@@ -22,11 +22,7 @@ class LicenseServiceProvider extends ServiceProvider
      */
     protected function verifyBundledKeyAgainstJwks()
     {
-        $authority = config('license.authority', 'https://hearth.master-data.ro');
-        if (empty($authority)) {
-            return; // nothing to verify against
-        }
-
+        $authority = Package::authorityUrl();
         $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
 
         try {
@@ -89,16 +85,46 @@ class LicenseServiceProvider extends ServiceProvider
     }
 
     /**
+     * Fatal authority misconfiguration must abort boot; benign openssl noise must not.
+     */
+    protected function shouldRethrowAuthorityDetectionFailure(\Throwable $e): bool
+    {
+        if (! $e instanceof \RuntimeException) {
+            return false;
+        }
+
+        $msg = $e->getMessage();
+
+        return str_contains($msg, 'aborting boot')
+            || str_contains($msg, 'Private key does not match')
+            || str_contains($msg, 'Bundled public key')
+            || str_contains($msg, 'Authority JWKS does not include');
+    }
+
+    protected function registerLicenseEnforcementMiddleware(): void
+    {
+        if (config('license.global_enforce')) {
+            $this->app->afterResolving(\Illuminate\Contracts\Http\Kernel::class, function (\Illuminate\Contracts\Http\Kernel $kernel) {
+                if (method_exists($kernel, 'prependMiddleware')) {
+                    $kernel->prependMiddleware(\Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
+                }
+            });
+
+            return;
+        }
+
+        $this->app->afterResolving(\Illuminate\Routing\Router::class, function (\Illuminate\Routing\Router $router) {
+            $router->pushMiddlewareToGroup('web', \Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
+        });
+    }
+
+    /**
      * Notify the authority about a potential fraud/integrity issue.
      * This is best-effort and will not block boot if the notify fails.
      */
     protected function notifyAuthorityAlert(?string $privatePem, array $alert): void
     {
-        $authority = config('license.authority', 'https://hearth.master-data.ro');
-        if (empty($authority)) {
-            return;
-        }
-
+        $authority = Package::authorityUrl();
         $endpoint = rtrim($authority, '/') . '/api/alert';
 
         $payloadJson = json_encode($alert, JSON_UNESCAPED_SLASHES);
@@ -159,176 +185,125 @@ class LicenseServiceProvider extends ServiceProvider
             return;
         }
 
-        // Always enforce by default: push the middleware into the 'web' group
-        // so web requests are blocked until a valid license is present.
-        // However, if this application is the authority itself (i.e. its
-        // configured authority_url points to this app), do not enforce — the
-        // authority should not block itself.
+        // Enforce license on every HTTP request unless this app is the authority.
+        // global_enforce prepends middleware to the kernel so API routes are covered too.
+        $isAuthority = false;
+
         try {
-            $isAuthority = false;
+            $privPath = config('license.private_key_path');
+            if (!empty($privPath) && file_exists($privPath)) {
+                $priv = @file_get_contents($privPath);
+                $privRes = false;
+                if (!empty($priv) && ($privRes = @openssl_pkey_get_private($priv)) !== false) {
+                    $isAuthority = true;
 
-            // Primary check: presence of a working private key indicates this
-            // application is the authority. A private key is required to sign
-            // license payloads and should not be present on client installs.
-            try {
-                $privPath = config('license.private_key_path', storage_path('keys/private.pem'));
-                if (empty($privPath)) {
-                    // no private key -> not authority (continue)
-                }
+                    try {
+                        $privDetails = openssl_pkey_get_details($privRes);
+                        if (!empty($privDetails['rsa']['n']) && !empty($privDetails['rsa']['e'])) {
+                            $localN = $this->base64UrlEncode($privDetails['rsa']['n']);
+                            $localE = $this->base64UrlEncode($privDetails['rsa']['e']);
 
-                if (!empty($privPath) && file_exists($privPath)) {
-                    $priv = @file_get_contents($privPath);
-                    $privRes = false;
-                    if (!empty($priv) && ($privRes = @openssl_pkey_get_private($priv)) !== false) {
-                        // We have a usable private key; treat this app as authority.
-                        $isAuthority = true;
-
-                        // Integrity check: ensure private key pairs with bundled public
-                        // key (if present) and is present in authority JWKS when
-                        // reachable. This prevents changing authority_url to point
-                        // to another host and masquerade as the authority.
-                        try {
-                            $privDetails = openssl_pkey_get_details($privRes);
-                            if (!empty($privDetails['rsa']['n']) && !empty($privDetails['rsa']['e'])) {
-                                $localN = $this->base64UrlEncode($privDetails['rsa']['n']);
-                                $localE = $this->base64UrlEncode($privDetails['rsa']['e']);
-
-                                // If the package bundles a public.pem, ensure it
-                                // corresponds to the private key we found.
-                                $bundledPub = __DIR__ . '/../keys/public.pem';
-                                if (file_exists($bundledPub)) {
-                                    $pubPem = @file_get_contents($bundledPub);
-                                    $pubRes = @openssl_pkey_get_public($pubPem);
-                                    if ($pubRes !== false) {
-                                        $pubDetails = openssl_pkey_get_details($pubRes);
-                                        if (empty($pubDetails['rsa']['n']) || empty($pubDetails['rsa']['e'])) {
-                                            throw new \RuntimeException('Bundled public key malformed');
-                                        }
-                                        $bundledN = $this->base64UrlEncode($pubDetails['rsa']['n']);
-                                        $bundledE = $this->base64UrlEncode($pubDetails['rsa']['e']);
-                                        if (!hash_equals($localN, $bundledN) || !hash_equals($localE, $bundledE)) {
-                                            throw new \RuntimeException('Private key does not match bundled public key — aborting boot to protect authority identity.');
-                                        }
-                                    } else {
-                                        throw new \RuntimeException('Bundled public key is invalid');
+                            $bundledPub = __DIR__ . '/../keys/public.pem';
+                            if (file_exists($bundledPub)) {
+                                $pubPem = @file_get_contents($bundledPub);
+                                $pubRes = @openssl_pkey_get_public($pubPem);
+                                if ($pubRes !== false) {
+                                    $pubDetails = openssl_pkey_get_details($pubRes);
+                                    if (empty($pubDetails['rsa']['n']) || empty($pubDetails['rsa']['e'])) {
+                                        throw new \RuntimeException('Bundled public key malformed');
                                     }
-                                }
-
-                                // If authority JWKS is reachable, ensure it contains
-                                // a key matching our private key parameters.
-                                $authority = config('license.authority', 'https://hearth.master-data.ro');
-                                if (!empty($authority)) {
-                                    try {
-                                        $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
-                                        $resp = Http::timeout(10)->get($jwksUrl);
-                                        if ($resp->successful()) {
-                                            $json = $resp->json();
-                                            $found = false;
-                                            foreach ($json['keys'] ?? [] as $jwk) {
-                                                if (!empty($jwk['n']) && !empty($jwk['e'])) {
-                                                    if (hash_equals($localN, $jwk['n']) && hash_equals($localE, $jwk['e'])) {
-                                                        $found = true;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                            if (! $found) {
-                                                // Notify authority (best-effort) before aborting
-                                                $alert = [
-                                                    'host' => $this->app->make('config')->get('app.url') ?? env('APP_URL', ''),
-                                                    'message' => 'Authority JWKS does not include the private key\'s public counterpart',
-                                                    'time' => now()->toIso8601String(),
-                                                ];
-                                                try {
-                                                    $this->notifyAuthorityAlert($priv, $alert);
-                                                } catch (\Throwable $_e) {
-                                                    logger()->warning('Failed to send authority alert: ' . $_e->getMessage());
-                                                }
-                                                throw new \RuntimeException('Authority JWKS does not include the private key\'s public counterpart — aborting boot.');
-                                            }
-                                        } else {
-                                            logger()->warning('Authority JWKS not available during integrity check (HTTP ' . $resp->status() . '), continuing with bundled key validation.');
-                                        }
-                                    } catch (\Throwable $e) {
-                                        logger()->warning('Failed to fetch/parse JWKS during authority integrity check: ' . $e->getMessage());
+                                    $bundledN = $this->base64UrlEncode($pubDetails['rsa']['n']);
+                                    $bundledE = $this->base64UrlEncode($pubDetails['rsa']['e']);
+                                    if (!hash_equals($localN, $bundledN) || !hash_equals($localE, $bundledE)) {
+                                        throw new \RuntimeException('Private key does not match bundled public key — aborting boot to protect authority identity.');
                                     }
+                                } else {
+                                    throw new \RuntimeException('Bundled public key is invalid');
                                 }
                             }
-                        } catch (\Throwable $e) {
-                            // On integrity failure we must abort boot to avoid
-                            // running as a spoofed authority. Re-throw so boot
-                            // fails fast and is visible.
-                            // Attempt to notify authority about the integrity failure
+
+                            $authority = Package::authorityUrl();
                             try {
-                                $alert = [
-                                    'host' => $this->app->make('config')->get('app.url') ?? env('APP_URL', ''),
-                                    'message' => $e->getMessage(),
-                                    'time' => now()->toIso8601String(),
-                                ];
-                                $this->notifyAuthorityAlert(isset($priv) ? $priv : null, $alert);
-                            } catch (\Throwable $_notify) {
-                                logger()->warning('Failed to send authority alert after integrity failure: ' . $_notify->getMessage());
+                                $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
+                                $resp = Http::timeout(10)->get($jwksUrl);
+                                if ($resp->successful()) {
+                                    $json = $resp->json();
+                                    $found = false;
+                                    foreach ($json['keys'] ?? [] as $jwk) {
+                                        if (!empty($jwk['n']) && !empty($jwk['e'])) {
+                                            if (hash_equals($localN, $jwk['n']) && hash_equals($localE, $jwk['e'])) {
+                                                $found = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (! $found) {
+                                        $alert = [
+                                            'host' => $this->app->make('config')->get('app.url') ?? env('APP_URL', ''),
+                                            'message' => 'Authority JWKS does not include the private key\'s public counterpart',
+                                            'time' => now()->toIso8601String(),
+                                        ];
+                                        try {
+                                            $this->notifyAuthorityAlert($priv, $alert);
+                                        } catch (\Throwable $_e) {
+                                            logger()->warning('Failed to send authority alert: ' . $_e->getMessage());
+                                        }
+                                        throw new \RuntimeException('Authority JWKS does not include the private key\'s public counterpart — aborting boot.');
+                                    }
+                                } else {
+                                    logger()->warning('Authority JWKS not available during integrity check (HTTP ' . $resp->status() . '), continuing with bundled key validation.');
+                                }
+                            } catch (\Throwable $e) {
+                                logger()->warning('Failed to fetch/parse JWKS during authority integrity check: ' . $e->getMessage());
                             }
+                        }
+                    } catch (\Throwable $e) {
+                        try {
+                            $alert = [
+                                'host' => $this->app->make('config')->get('app.url') ?? env('APP_URL', ''),
+                                'message' => $e->getMessage(),
+                                'time' => now()->toIso8601String(),
+                            ];
+                            $this->notifyAuthorityAlert(isset($priv) ? $priv : null, $alert);
+                        } catch (\Throwable $_notify) {
+                            logger()->warning('Failed to send authority alert after integrity failure: ' . $_notify->getMessage());
+                        }
 
-                            throw $e;
-                        } finally {
-                            if (is_resource($privRes)) {
-                                @openssl_free_key($privRes);
-                            }
+                        throw $e;
+                    } finally {
+                        if (is_resource($privRes)) {
+                            @openssl_free_key($privRes);
                         }
                     }
                 }
-            } catch (\Throwable $e) {
-                // ignore and fall back to host equality check below
-            }
-
-            // Secondary check: if a private key isn't available, require that the
-            // configured authority_url host exactly matches app.url host. This
-            // is weaker but allows local development setups where keys are not
-            // present.
-            if (! $isAuthority) {
-                $authority = config('license.authority', 'https://hearth.master-data.ro');
-                if (!empty($authority)) {
-                    $authHost = parse_url(rtrim($authority, '/'), PHP_URL_HOST) ?: null;
-                    $appUrl = config('app.url') ?? env('APP_URL', '');
-                    $appHost = parse_url($appUrl, PHP_URL_HOST) ?: null;
-                    if ($authHost && $appHost && strcasecmp($authHost, $appHost) === 0) {
-                        $isAuthority = true;
-                    }
-                }
-            }
-
-            if ($isAuthority) {
-                logger()->info('License client: this application is configured as authority — skipping enforcement middleware.');
-            } else {
-                // Automatically register license middleware to web group
-                // This works by accessing the router after it's resolved
-                $this->app->afterResolving(\Illuminate\Routing\Router::class, function (\Illuminate\Routing\Router $router) {
-                    $router->pushMiddlewareToGroup('web', \Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
-                });
             }
         } catch (\Throwable $e) {
-            // don't break the application if something goes wrong here
+            if ($this->shouldRethrowAuthorityDetectionFailure($e)) {
+                throw $e;
+            }
+            logger()->debug('License client authority detection: ' . $e->getMessage());
         }
 
-        // Optionally prepend to the global HTTP kernel so enforcement covers
-        // all requests (including routes not in 'web' group). This is a
-        // package-level decision and controlled via config.
-        try {
-            if (config('license.global_enforce', false)) {
-                $kernel = $this->app->make(\Illuminate\Contracts\Http\Kernel::class);
-                if (method_exists($kernel, 'prependMiddleware')) {
-                    $kernel->prependMiddleware(\Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
-                }
+        if (! $isAuthority) {
+            $authority = Package::authorityUrl();
+            $authHost = parse_url(rtrim($authority, '/'), PHP_URL_HOST) ?: null;
+            $appUrl = config('app.url') ?? env('APP_URL', '');
+            $appHost = parse_url($appUrl, PHP_URL_HOST) ?: null;
+            if ($authHost && $appHost && strcasecmp($authHost, $appHost) === 0) {
+                $isAuthority = true;
             }
-        } catch (\Throwable $e) {
-            logger()->debug('Failed to prepend license middleware to kernel: ' . $e->getMessage());
+        }
+
+        if ($isAuthority) {
+            logger()->info('License client: this application is configured as authority — skipping enforcement middleware.');
+        } else {
+            $this->registerLicenseEnforcementMiddleware();
         }
 
         // If we detected a private key and integrity validated, write a
         // signed fingerprint file for future reference.
         try {
-            $privPath = config('license.private_key_path', storage_path('keys/private.pem'));
+            $privPath = config('license.private_key_path');
 
             if (!empty($privPath) && file_exists($privPath)) {
                 $priv = @file_get_contents($privPath);
