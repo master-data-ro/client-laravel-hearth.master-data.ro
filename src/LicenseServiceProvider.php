@@ -9,7 +9,7 @@ class LicenseServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/license.php', 'license');
+        // No mergeable config: enforcement and paths come only from Package.
     }
 
     /**
@@ -103,7 +103,7 @@ class LicenseServiceProvider extends ServiceProvider
 
     protected function registerLicenseEnforcementMiddleware(): void
     {
-        if (config('license.global_enforce')) {
+        if (Package::globalEnforce()) {
             $this->app->afterResolving(\Illuminate\Contracts\Http\Kernel::class, function (\Illuminate\Contracts\Http\Kernel $kernel) {
                 if (method_exists($kernel, 'prependMiddleware')) {
                     $kernel->prependMiddleware(\Hearth\LicenseClient\Middleware\EnsureHasValidLicense::class);
@@ -190,8 +190,8 @@ class LicenseServiceProvider extends ServiceProvider
         $isAuthority = false;
 
         try {
-            $privPath = config('license.private_key_path');
-            if (!empty($privPath) && file_exists($privPath)) {
+            $privPath = Package::authoritySigningPrivateKeyPath();
+            if (file_exists($privPath)) {
                 $priv = @file_get_contents($privPath);
                 $privRes = false;
                 if (!empty($priv) && ($privRes = @openssl_pkey_get_private($priv)) !== false) {
@@ -303,9 +303,9 @@ class LicenseServiceProvider extends ServiceProvider
         // If we detected a private key and integrity validated, write a
         // signed fingerprint file for future reference.
         try {
-            $privPath = config('license.private_key_path');
+            $privPath = Package::authoritySigningPrivateKeyPath();
 
-            if (!empty($privPath) && file_exists($privPath)) {
+            if (file_exists($privPath)) {
                 $priv = @file_get_contents($privPath);
                 if (!empty($priv) && @openssl_pkey_get_private($priv) !== false) {
                     // derive fingerprint from public key

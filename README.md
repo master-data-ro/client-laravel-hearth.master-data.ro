@@ -7,7 +7,7 @@
 Adaugă în `composer.json` sau instalează direct din repository:
 
 ```bash
-composer require master-data-ro/hearth-license-client:dev-main
+composer require hearth/license-client
 ```
 
 Pentru testare locală, poți adăuga un repository de tip `path`:
@@ -86,4 +86,4 @@ Client → Autoritate → Client → Middleware → Aplicație
 - [GitHub: master-data-ro/hearth-license-client](https://github.com/master-data-ro/hearth-license-client)
 
 ---
-© 2025 master-data.ro
+© 2025-2026 master-data.ro

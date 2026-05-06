@@ -23,6 +23,9 @@ final class Package
     // Files
     private const FINGERPRINT_FILE = 'license-fingerprint.json';
 
+    /** Relative to Laravel storage/ — authority signing key (fixed; not configurable). */
+    private const AUTHORITY_PRIVATE_KEY_STORAGE = 'keys/private.pem';
+
     // Whitelisted paths that bypass enforcement (prefix matches)
     private const WHITELIST = [
         '/health',
@@ -64,6 +67,14 @@ final class Package
         return self::GLOBAL_ENFORCE;
     }
 
+    /**
+     * Expected PEM path on authority installs. Clients must not ship this file.
+     */
+    public static function authoritySigningPrivateKeyPath(): string
+    {
+        return storage_path(self::AUTHORITY_PRIVATE_KEY_STORAGE);
+    }
+
     public static function fingerprintFile(): string
     {
         return self::FINGERPRINT_FILE;
@@ -75,12 +86,12 @@ final class Package
     }
 
     /**
-     * Where the authority's private key should live in an authority install.
-     * Clients should never ship this file.
+     * @deprecated Use authoritySigningPrivateKeyPath()
      */
     public static function privateKeyPath(): ?string
     {
-        $candidate = storage_path('private.pem');
-        return file_exists($candidate) ? $candidate : null;
+        $p = self::authoritySigningPrivateKeyPath();
+
+        return file_exists($p) ? $p : null;
     }
 }
