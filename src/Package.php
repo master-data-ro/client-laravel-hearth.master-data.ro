@@ -85,11 +85,37 @@ final class Package
     }
 
     /**
-     * Rutele UI pentru activarea licenței (doar /licenta). Accesibile doar când licența nu e validă.
+     * Path segment from APP_URL when the app is served under a subdirectory (e.g. /myapp).
+     * Returns '' or '/myapp' (no trailing slash).
+     */
+    public static function appUrlPathPrefix(): string
+    {
+        $url = (string) (config('app.url') ?? env('APP_URL', ''));
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! is_string($path) || $path === '' || $path === '/') {
+            return '';
+        }
+
+        return '/' . trim($path, '/');
+    }
+
+    /**
+     * Full URI path to the license UI root (e.g. /licenta or /myapp/licenta).
+     */
+    public static function licenseActivationBasePath(): string
+    {
+        return self::appUrlPathPrefix() . '/licenta';
+    }
+
+    /**
+     * Rutele UI pentru activarea licenței (/licenta, eventual cu prefix din APP_URL).
+     * Accesibile doar când licența nu e validă.
      */
     public static function isLicenseActivationPath(string $path): bool
     {
-        return $path === '/licenta' || str_starts_with($path, '/licenta/');
+        $base = self::licenseActivationBasePath();
+
+        return $path === $base || str_starts_with($path, $base . '/');
     }
 
     /**

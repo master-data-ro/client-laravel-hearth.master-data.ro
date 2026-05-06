@@ -53,6 +53,12 @@ class LicenseClientStatusCommand extends Command
         $licenseFile = storage_path('license.json');
         $this->line('Fișier licență: ' . (is_file($licenseFile) ? '<info>există</>' : '<fg=red>lipsește</>') . ' <comment>' . $licenseFile . '</>');
 
+        $this->line('Cale UI activare licență: <info>' . Package::licenseActivationBasePath() . '</> (din <comment>APP_URL</> / <comment>app.url</>).');
+
+        if ($this->laravel->routesAreCached()) {
+            $this->warn('Cache rute: <fg=yellow>ACTIV</>. Dacă ai instalat/actualizat pachetul după <info>route:cache</info>, rutele UI pot lipsi — rulează <info>php artisan route:clear</info> sau regenerează cache-ul.');
+        }
+
         $this->newLine();
         $this->comment('Middleware-ul global se atașează la primul request HTTP (din Artisan stiva poate fi goală — e normal).');
 

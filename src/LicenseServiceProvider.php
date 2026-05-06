@@ -2,8 +2,10 @@
 
 namespace Hearth\LicenseClient;
 
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
 
 class LicenseServiceProvider extends ServiceProvider
 {
@@ -157,6 +159,36 @@ class LicenseServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Register /licenta web routes (with optional subdirectory prefix from app.url).
+     * Skips loading when route cache is active — same contract as loadRoutesFrom().
+     */
+    protected function registerLicenseWebRoutes(): void
+    {
+        $routesPath = __DIR__ . '/../routes/web.php';
+        if (! is_file($routesPath)) {
+            return;
+        }
+
+        if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
+            return;
+        }
+
+        $appUrl = (string) ($this->app['config']->get('app.url') ?? '');
+        $pathFromUrl = parse_url($appUrl, PHP_URL_PATH);
+        $prefix = is_string($pathFromUrl) ? trim($pathFromUrl, '/') : '';
+
+        Route::middleware('web')->group(function () use ($routesPath, $prefix) {
+            if ($prefix !== '') {
+                Route::prefix($prefix)->group(function () use ($routesPath) {
+                    require $routesPath;
+                });
+            } else {
+                require $routesPath;
+            }
+        });
+    }
+
     public function boot()
     {
         // Verify that the bundled public key matches the authority JWKS if available.
@@ -175,14 +207,9 @@ class LicenseServiceProvider extends ServiceProvider
             $this->loadViewsFrom(__DIR__ . '/../resources/views', 'license-client');
         }
 
-        // Load package web routes for interactive license management (/licenta)
-        // These routes are intentionally minimal and placed inside the package so
-        // that the host application does not need to provide an interactive
-        // license UI.
-        $routesPath = __DIR__ . '/../routes/web.php';
-        if (file_exists($routesPath)) {
-            $this->loadRoutesFrom($routesPath);
-        }
+        // Load package web routes for interactive license management (/licenta).
+        // Uses APP_URL path prefix when the app runs in a subdirectory so /licenta matches requests.
+        $this->registerLicenseWebRoutes();
 
         if (! $this->app->runningInConsole()) {
         // Enforce license on every HTTP request unless this app is the authority.

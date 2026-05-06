@@ -50,7 +50,11 @@ php artisan license-client:status
 
 Dacă vezi `There are no commands defined in the "license-client" namespace`, pachetul din `vendor/` e încă vechi sau providerul nu e încărcat: actualizează la **0.1.1+**, apoi `php artisan package:discover` și eventual adaugă manual providerul în `bootstrap/providers.php`.
 
-3. Dacă tot nu merge, înregistrează provider-ul **manual** în `bootstrap/providers.php` (Laravel 11, 12, 13):  
+### 404 pe `/licenta` sau pagina UI nu se încarcă
+
+1. **Cache rute:** dacă rulezi `php artisan route:cache`, rutele pachetului trebuie incluse în acel cache. După `composer update` / prima instalare a pachetului, un cache vechi poate să nu conțină rutele — rulează **`php artisan route:clear`** (sau regenerează `route:cache` după ce pachetul e instalat).
+2. **Subdirector:** dacă aplicația e servită sub un path (ex. `https://exemplu.ro/myapp`), setează **`APP_URL`** (și `config('app.url')`) la URL-ul complet **cu** acel path. Rutele UI se înregistrează atunci la `…/myapp/licenta` (nu la rădăcină domeniului). Verifică cu `php artisan license-client:status` câmpul „Cale UI activare licență”.
+3. **Provider manual:** dacă tot nu merge, înregistrează provider-ul în `bootstrap/providers.php` (Laravel 11, 12, 13):  
    `Hearth\LicenseClient\LicenseServiceProvider::class,`
 
 Pentru testare locală, poți adăuga un repository de tip `path`:
@@ -80,7 +84,7 @@ php artisan license-client:status
 
 2. La succes, pachetul va salva fișierul `storage/license.json` cu metadatele licenței (criptat).
 
-3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): doar **`/licenta`** — status și activare cheie (accesibilă **doar când licența nu e validă**; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-ul rămâne doar în cod (`Package`).
+3. Interfață web **Bootstrap 5** (autonomă, fără `layouts.app`): **`/licenta`** (sau `{prefix-din-APP_URL}/licenta` în subdirector) — status și activare cheie (accesibilă **doar când licența nu e validă**; cu licență activă se redirecționează la `/`). Nu există link public către portalul autorității; endpoint-ul rămâne doar în cod (`Package`).
 
 4. Middleware-ul `EnsureHasValidLicense` este înregistrat automat de provider (global pe kernel). Aplicația răspunde cu HTTP 403 până există o licență validă în `storage/license.json` (excepții: consolă, mod autoritate, rute whitelist).
 
@@ -130,7 +134,7 @@ Client → Autoritate → Client → Middleware → Aplicație
 
 ## Notă enforcement
 
-- Middleware-ul de enforcement nu poate fi dezactivat. **`/licenta`** este accesibilă **doar fără licență validă**; cu licență activă se redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
+- Middleware-ul de enforcement nu poate fi dezactivat. **Pagina de activare** (calea exactă: `Package::licenseActivationBasePath()`) este accesibilă **doar fără licență validă**; cu licență activă se redirecționează la `/`. Alte rute permise implicit: health, JWKS, push-license etc. (vezi `Package::whitelist()`).
 
 ## Linkuri utile
 

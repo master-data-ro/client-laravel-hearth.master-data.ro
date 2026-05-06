@@ -58,7 +58,10 @@ class EnsureHasValidLicense
             };
             $message = Messages::get($messageKey);
 
-            return response()->view('license-client::blocked', ['message' => $message], 403);
+            return response()->view('license-client::blocked', [
+                'message' => $message,
+                'license_code' => $state['code'],
+            ], 403);
         }
 
         return $next($request);

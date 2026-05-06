@@ -45,9 +45,12 @@
         </div>
         <div class="card-body p-4">
             @if (!$hasLicense)
-                <div class="tl-stat text-center py-4">
-                    <span class="badge text-bg-secondary rounded-pill px-3 py-2 mb-3">Nicio licență instalată</span>
-                    <p class="text-muted mb-0">Completați formularul de mai jos cu cheia primită.</p>
+                <div class="tl-stat text-center py-4 px-2">
+                    <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:4rem;height:4rem;">
+                        <i class="bi bi-inbox text-primary" style="font-size:1.75rem;"></i>
+                    </div>
+                    <div class="mb-2"><span class="badge text-bg-secondary rounded-pill px-3 py-2">Nu aveți licență instalată</span></div>
+                    <p class="text-muted mb-0 small">Încă nu s-a salvat niciun fișier de licență valid. Folosiți formularul de mai jos după ce primiți cheia.</p>
                 </div>
             @else
                 <div class="row g-3 mb-3">
