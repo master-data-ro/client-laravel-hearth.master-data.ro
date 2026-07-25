@@ -2,10 +2,10 @@
 
 namespace Hearth\LicenseClient\Console;
 
+use Hearth\LicenseClient\AuthorityHttp;
 use Hearth\LicenseClient\LicenseState;
 use Hearth\LicenseClient\Package;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 
 class LicenseClientProbeCommand extends Command
 {
@@ -16,19 +16,19 @@ class LicenseClientProbeCommand extends Command
     public function handle(): int
     {
         $authority = rtrim(Package::authorityUrl(), '/');
-        $jwksUrl = $authority . '/.well-known/jwks.json';
-        $pemUrl = $authority . '/' . ltrim(Package::pemEndpoint(), '/');
-        $verifyUrl = $authority . '/' . ltrim(Package::verifyEndpoint(), '/');
+        $jwksUrl = $authority.'/.well-known/jwks.json';
+        $pemUrl = $authority.'/'.ltrim(Package::pemEndpoint(), '/');
+        $verifyUrl = $authority.'/'.ltrim(Package::verifyEndpoint(), '/');
 
         $jwksOk = false;
         $jwksHttp = null;
         $jwksError = null;
         try {
-            $jwksResp = Http::timeout(Package::remoteTimeout())->get($jwksUrl);
+            $jwksResp = AuthorityHttp::get('/.well-known/jwks.json');
             $jwksHttp = $jwksResp->status();
             $jwksOk = $jwksResp->successful();
             if (! $jwksOk) {
-                $jwksError = 'HTTP ' . $jwksResp->status();
+                $jwksError = 'HTTP '.$jwksResp->status();
             }
         } catch (\Throwable $e) {
             $jwksError = $e->getMessage();
@@ -38,11 +38,11 @@ class LicenseClientProbeCommand extends Command
         $pemHttp = null;
         $pemError = null;
         try {
-            $pemResp = Http::timeout(Package::remoteTimeout())->get($pemUrl);
+            $pemResp = AuthorityHttp::get(Package::pemEndpoint());
             $pemHttp = $pemResp->status();
             $pemOk = $pemResp->successful() && str_contains($pemResp->body(), 'BEGIN PUBLIC KEY');
             if (! $pemOk && $pemError === null) {
-                $pemError = $pemResp->successful() ? 'body fără PEM' : 'HTTP ' . $pemResp->status();
+                $pemError = $pemResp->successful() ? 'body fără PEM' : 'HTTP '.$pemResp->status();
             }
         } catch (\Throwable $e) {
             $pemError = $e->getMessage();
@@ -52,14 +52,14 @@ class LicenseClientProbeCommand extends Command
         $verifyHttp = null;
         $verifyError = null;
         try {
-            $vResp = Http::timeout(Package::remoteTimeout())->post($verifyUrl, [
+            $vResp = AuthorityHttp::post(Package::verifyEndpoint(), [
                 'license_key' => '__hearth_probe__',
                 'domain' => 'probe.invalid',
             ]);
             $verifyHttp = $vResp->status();
             $verifyReachable = true;
             if ($vResp->status() >= 500) {
-                $verifyError = 'HTTP ' . $vResp->status();
+                $verifyError = 'HTTP '.$vResp->status();
             }
         } catch (\Throwable $e) {
             $verifyError = $e->getMessage();
@@ -70,7 +70,7 @@ class LicenseClientProbeCommand extends Command
         $state = LicenseState::resolve();
         $activationPath = Package::licenseActivationBasePath();
 
-        $composerPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'composer.json';
+        $composerPath = dirname(__DIR__, 2).DIRECTORY_SEPARATOR.'composer.json';
         $packageVersion = 'unknown';
         if (is_file($composerPath)) {
             $c = json_decode((string) file_get_contents($composerPath), true);
@@ -117,14 +117,14 @@ class LicenseClientProbeCommand extends Command
         }
 
         $this->line('<fg=cyan>hearth/license-client — probe</>');
-        $this->line('Versiune pachet (composer): <info>' . $packageVersion . '</>');
-        $this->line('license.json: ' . ($licenseFileExists ? '<info>există</>' : '<fg=yellow>lipsește</>') . ' <comment>' . $licensePath . '</>');
-        $this->line('LicenseState: ' . ($state['ok'] ? '<info>ok</>' : '<fg=yellow>' . $state['code'] . '</>'));
-        $this->line('Cale UI licență: <info>' . $activationPath . '</>');
+        $this->line('Versiune pachet (composer): <info>'.$packageVersion.'</>');
+        $this->line('license.json: '.($licenseFileExists ? '<info>există</>' : '<fg=yellow>lipsește</>').' <comment>'.$licensePath.'</>');
+        $this->line('LicenseState: '.($state['ok'] ? '<info>ok</>' : '<fg=yellow>'.$state['code'].'</>'));
+        $this->line('Cale UI licență: <info>'.$activationPath.'</>');
         $this->newLine();
-        $this->line('JWKS: ' . ($jwksOk ? '<info>OK</>' : '<fg=red>FAIL</>') . ($jwksHttp !== null ? ' (HTTP ' . $jwksHttp . ')' : '') . ($jwksError ? ' — ' . $jwksError : ''));
-        $this->line('PEM:  ' . ($pemOk ? '<info>OK</>' : '<fg=red>FAIL</>') . ($pemHttp !== null ? ' (HTTP ' . $pemHttp . ')' : '') . ($pemError ? ' — ' . $pemError : ''));
-        $this->line('POST verify: ' . ($verifyReachable ? '<info>răspuns primit</>' : '<fg=red>fără răspuns</>') . ($verifyHttp !== null ? ' (HTTP ' . $verifyHttp . ')' : '') . ($verifyError ? ' — ' . $verifyError : ''));
+        $this->line('JWKS: '.($jwksOk ? '<info>OK</>' : '<fg=red>FAIL</>').($jwksHttp !== null ? ' (HTTP '.$jwksHttp.')' : '').($jwksError ? ' — '.$jwksError : ''));
+        $this->line('PEM:  '.($pemOk ? '<info>OK</>' : '<fg=red>FAIL</>').($pemHttp !== null ? ' (HTTP '.$pemHttp.')' : '').($pemError ? ' — '.$pemError : ''));
+        $this->line('POST verify: '.($verifyReachable ? '<info>răspuns primit</>' : '<fg=red>fără răspuns</>').($verifyHttp !== null ? ' (HTTP '.$verifyHttp.')' : '').($verifyError ? ' — '.$verifyError : ''));
 
         return self::SUCCESS;
     }

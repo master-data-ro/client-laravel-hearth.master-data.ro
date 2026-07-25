@@ -40,7 +40,7 @@ class LicenseServiceProvider extends ServiceProvider
         $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
 
         try {
-            $resp = Http::timeout(10)->get($jwksUrl);
+            $resp = AuthorityHttp::get('/.well-known/jwks.json');
         } catch (\Throwable $e) {
             // Could not fetch JWKS; allow boot to continue (network issues)
             logger()->warning('Could not fetch JWKS for license-client verification: ' . $e->getMessage());
@@ -258,8 +258,7 @@ class LicenseServiceProvider extends ServiceProvider
 
                             $authority = Package::authorityUrl();
                             try {
-                                $jwksUrl = rtrim($authority, '/') . '/.well-known/jwks.json';
-                                $resp = Http::timeout(10)->get($jwksUrl);
+                                $resp = AuthorityHttp::get('/.well-known/jwks.json');
                                 if ($resp->successful()) {
                                     $json = $resp->json();
                                     $found = false;

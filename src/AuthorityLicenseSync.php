@@ -2,16 +2,11 @@
 
 namespace Hearth\LicenseClient;
 
-use Illuminate\Support\Facades\Http;
-
 /**
  * Verificare la autoritate + salvare locală (folosit de UI, verify și cron).
  */
 final class AuthorityLicenseSync
 {
-    /**
-     * Cheia din storage/license.json decryptată, sau null.
-     */
     public static function resolveStoredLicenseKey(): ?string
     {
         $path = storage_path('license.json');
@@ -35,9 +30,6 @@ final class AuthorityLicenseSync
         }
     }
 
-    /**
-     * Instalare tip autoritate: nu încercăm sync remote către noi înșine.
-     */
     public static function shouldSkipRemoteSync(): bool
     {
         if (is_file(Package::authoritySigningPrivateKeyPath())) {
@@ -80,19 +72,15 @@ final class AuthorityLicenseSync
             }
         }
 
-        $authority = Package::authorityUrl();
-        if ($authority === '') {
+        if (Package::authorityUrl() === '') {
             return ['ok' => false, 'error' => 'Autoritatea nu este configurată.'];
         }
 
-        $verifyUrl = rtrim($authority, '/') . '/' . ltrim(Package::verifyEndpoint(), '/');
-
         try {
-            $resp = Http::timeout(Package::remoteTimeout())
-                ->post($verifyUrl, [
-                    'license_key' => $key,
-                    'domain' => parse_url(config('app.url') ?? env('APP_URL', ''), PHP_URL_HOST) ?: gethostname(),
-                ]);
+            $resp = AuthorityHttp::post(Package::verifyEndpoint(), [
+                'license_key' => $key,
+                'domain' => parse_url(config('app.url') ?? env('APP_URL', ''), PHP_URL_HOST) ?: gethostname(),
+            ]);
             $json = $resp->json();
 
             if (empty($json['data']) || ! isset($json['signature'])) {
@@ -102,16 +90,11 @@ final class AuthorityLicenseSync
             $data = $json['data'];
             $signature = base64_decode($json['signature']);
 
-            try {
-                $pemResp = Http::timeout(Package::remoteTimeout())
-                    ->get(rtrim($authority, '/') . '/' . ltrim(Package::pemEndpoint(), '/'));
-                if (! $pemResp->successful()) {
-                    return ['ok' => false, 'error' => 'Nu am putut prelua cheia publică de la autoritate: HTTP ' . $pemResp->status()];
-                }
-                $pem = $pemResp->body();
-            } catch (\Throwable $e) {
-                return ['ok' => false, 'error' => 'Eroare la descărcarea cheii publice: ' . $e->getMessage()];
+            $pemResp = AuthorityHttp::get(Package::pemEndpoint());
+            if (! $pemResp->successful()) {
+                return ['ok' => false, 'error' => 'Nu am putut prelua cheia publică de la autoritate: HTTP '.$pemResp->status()];
             }
+            $pem = $pemResp->body();
 
             $payloadJson = json_encode($data);
             $pub = openssl_pkey_get_public($pem);
@@ -125,6 +108,7 @@ final class AuthorityLicenseSync
                 return ['ok' => false, 'error' => 'Verificarea semnăturii a eșuat.'];
             }
 
+            $authority = Package::authorityUrl();
             $payload = [
                 'license_key' => $key,
                 'domain' => parse_url(config('app.url') ?? env('APP_URL', ''), PHP_URL_HOST) ?: gethostname(),
@@ -145,13 +129,13 @@ final class AuthorityLicenseSync
             $serverMessage = $data['message'] ?? null;
             $base = 'Licența a fost verificată și salvată local.';
             if ($successPrefix !== null && $successPrefix !== '') {
-                $base = trim($successPrefix) . ' ' . $base;
+                $base = trim($successPrefix).' '.$base;
             }
-            $msg = $base . ($serverMessage ? ' Mesaj server: ' . $serverMessage : '');
+            $msg = $base.($serverMessage ? ' Mesaj server: '.$serverMessage : '');
 
             return ['ok' => true, 'success' => $msg];
         } catch (\Throwable $e) {
-            return ['ok' => false, 'error' => 'Eroare la verificarea la autoritate: ' . $e->getMessage()];
+            return ['ok' => false, 'error' => 'Eroare la verificarea la autoritate: '.$e->getMessage()];
         }
     }
 }

@@ -13,26 +13,20 @@ final class Package
 
     public const HEADER_LICENSE_OK = 'X-License-Ok';
 
-    // Fixed authority and endpoints
-    private const AUTHORITY_URL = 'https://hearth.master-data.ro';
+    private const AUTHORITY_URL = 'https://hearth.scmc.ro';
+    private const AUTHORITY_URL_FALLBACK = 'https://hearth.master-data.ro';
     private const VERIFY_ENDPOINT = '/api/verify';
     private const PEM_ENDPOINT = '/keys/pem';
     private const ALERT_ENDPOINT = '/api/alert/fraud';
 
-    // Networking
-    private const REMOTE_TIMEOUT = 5; // seconds
+    private const REMOTE_TIMEOUT = 5;
 
-    // Enforcement
-    private const GLOBAL_ENFORCE = true; // always prepend to kernel too
+    private const GLOBAL_ENFORCE = true;
 
-    // Files
     private const FINGERPRINT_FILE = 'license-fingerprint.json';
 
-    /** Relative to Laravel storage/ — authority signing key (fixed; not configurable). */
     private const AUTHORITY_PRIVATE_KEY_STORAGE = 'keys/private.pem';
 
-    // Whitelisted paths that bypass enforcement (prefix matches).
-    // /licenta nu e aici — e tratată în middleware (doar fără licență validă).
     private const WHITELIST = [
         '/health',
         '/.well-known/push-license',
@@ -43,7 +37,33 @@ final class Package
 
     public static function authorityUrl(): string
     {
+        $fromConfig = function_exists('config') ? config('scmc_integration.license_authority_url') : null;
+        if (is_string($fromConfig) && $fromConfig !== '') {
+            return rtrim($fromConfig, '/');
+        }
+
         return self::AUTHORITY_URL;
+    }
+
+    public static function authorityUrlFallback(): string
+    {
+        $fromConfig = function_exists('config') ? config('scmc_integration.license_authority_url_fallback') : null;
+        if (is_string($fromConfig) && $fromConfig !== '') {
+            return rtrim($fromConfig, '/');
+        }
+
+        return self::AUTHORITY_URL_FALLBACK;
+    }
+
+    public static function legacyFallbackEnabled(): bool
+    {
+        if (function_exists('config')) {
+            return filter_var(config('scmc_integration.legacy_fallback_enabled', true), FILTER_VALIDATE_BOOLEAN);
+        }
+
+        $env = getenv('SCMC_INTEGRATION_LEGACY_FALLBACK_ENABLED');
+
+        return filter_var($env === false ? 'true' : $env, FILTER_VALIDATE_BOOLEAN);
     }
 
     public static function verifyEndpoint(): string
@@ -71,9 +91,6 @@ final class Package
         return self::GLOBAL_ENFORCE;
     }
 
-    /**
-     * Expected PEM path on authority installs. Clients must not ship this file.
-     */
     public static function authoritySigningPrivateKeyPath(): string
     {
         return storage_path(self::AUTHORITY_PRIVATE_KEY_STORAGE);
@@ -89,10 +106,6 @@ final class Package
         return self::WHITELIST;
     }
 
-    /**
-     * Path segment from APP_URL when the app is served under a subdirectory (e.g. /myapp).
-     * Returns '' or '/myapp' (no trailing slash).
-     */
     public static function appUrlPathPrefix(): string
     {
         $url = (string) (config('app.url') ?? env('APP_URL', ''));
@@ -101,32 +114,22 @@ final class Package
             return '';
         }
 
-        return '/' . trim($path, '/');
+        return '/'.trim($path, '/');
     }
 
-    /**
-     * Full URI path to the license UI root (e.g. /licenta or /myapp/licenta).
-     */
     public static function licenseActivationBasePath(): string
     {
-        return self::appUrlPathPrefix() . '/licenta';
+        return self::appUrlPathPrefix().'/licenta';
     }
 
-    /**
-     * Rutele UI pentru activarea licenței (/licenta, eventual cu prefix din APP_URL).
-     * Accesibile doar când licența nu e validă.
-     */
     public static function isLicenseActivationPath(string $path): bool
     {
         $base = self::licenseActivationBasePath();
 
-        return $path === $base || str_starts_with($path, $base . '/');
+        return $path === $base || str_starts_with($path, $base.'/');
     }
 
     /**
-     * Corp JSON stabil pentru HTTP 403 când licența nu permite accesul (SPA / Inertia).
-     * Câmpul `retry_after` este opțional (ex. rate limiting viitor).
-     *
      * @return array{message: string, license_code: string, retry_after?: int}
      */
     public static function licenseForbiddenJsonBody(string $message, string $licenseCode, ?int $retryAfter = null): array
