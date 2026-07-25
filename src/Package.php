@@ -14,7 +14,7 @@ final class Package
     public const HEADER_LICENSE_OK = 'X-License-Ok';
 
     private const AUTHORITY_URL = 'https://hearth.scmc.ro';
-    private const AUTHORITY_URL_FALLBACK = 'https://hearth.master-data.ro';
+    private const AUTHORITY_URL_FALLBACK = '';
     private const VERIFY_ENDPOINT = '/api/verify';
     private const PEM_ENDPOINT = '/keys/pem';
     private const ALERT_ENDPOINT = '/api/alert/fraud';
