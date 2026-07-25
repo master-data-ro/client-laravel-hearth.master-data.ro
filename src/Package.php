@@ -14,7 +14,6 @@ final class Package
     public const HEADER_LICENSE_OK = 'X-License-Ok';
 
     private const AUTHORITY_URL = 'https://hearth.scmc.ro';
-    private const AUTHORITY_URL_FALLBACK = '';
     private const VERIFY_ENDPOINT = '/api/verify';
     private const PEM_ENDPOINT = '/keys/pem';
     private const ALERT_ENDPOINT = '/api/alert/fraud';
@@ -43,27 +42,6 @@ final class Package
         }
 
         return self::AUTHORITY_URL;
-    }
-
-    public static function authorityUrlFallback(): string
-    {
-        $fromConfig = function_exists('config') ? config('scmc_integration.license_authority_url_fallback') : null;
-        if (is_string($fromConfig) && $fromConfig !== '') {
-            return rtrim($fromConfig, '/');
-        }
-
-        return self::AUTHORITY_URL_FALLBACK;
-    }
-
-    public static function legacyFallbackEnabled(): bool
-    {
-        if (function_exists('config')) {
-            return filter_var(config('scmc_integration.legacy_fallback_enabled', true), FILTER_VALIDATE_BOOLEAN);
-        }
-
-        $env = getenv('SCMC_INTEGRATION_LEGACY_FALLBACK_ENABLED');
-
-        return filter_var($env === false ? 'true' : $env, FILTER_VALIDATE_BOOLEAN);
     }
 
     public static function verifyEndpoint(): string
