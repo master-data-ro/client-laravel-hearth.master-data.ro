@@ -10,7 +10,7 @@ class MakeLicenseServerCommand extends Command
 {
     protected $signature = 'make:license-server {key? : The license key to verify} {--passphrase= : Optional passphrase to derive the encryption key (defaults to APP_KEY)} {--show : Show/decrypt existing saved license instead of verifying a new key}';
 
-    protected $description = 'Verify a license key with hearth.master-data.ro and store the validated license locally.';
+    protected $description = 'Verify a license key with hearth.scmc.ro and store the validated license locally.';
 
     public function handle()
     {
@@ -44,7 +44,7 @@ class MakeLicenseServerCommand extends Command
             return 4;
         }
 
-        $this->info('Verifying license key against hearth.master-data.ro...');
+        $this->info('Verifying license key against hearth.scmc.ro...');
 
         $authority = Package::authorityUrl();
 

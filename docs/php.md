@@ -8,7 +8,7 @@ require 'HearthClient.php';
 // Serverul emite un JWT (RS256) când adminul aprobă licența.
 // Clientul primește JWT-ul și îl folosește ca Bearer token pentru API-uri protejate.
 
-$client = new \Hearth\SDK\HearthClient('https://master-data.ro');
+$client = new \Hearth\SDK\HearthClient('https://hearth.scmc.ro');
 $client->setToken('eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...');
 
 // Exemplu request protejat

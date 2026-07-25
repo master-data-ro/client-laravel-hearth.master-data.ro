@@ -1,6 +1,6 @@
 {
   "name": "hearth/license-client",
-  "description": "Laravel helper package that verifies a license key against master-data.ro and stores the result locally.",
+  "description": "Laravel helper package that verifies a license key against hearth.scmc.ro and stores the result locally.",
   "type": "library",
   "license": "MIT",
   "version": "0.1.9",

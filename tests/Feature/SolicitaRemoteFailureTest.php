@@ -12,7 +12,7 @@ class SolicitaRemoteFailureTest extends TestCase
         $this->assertFileDoesNotExist(storage_path('license.json'));
 
         Http::fake([
-            'https://hearth.master-data.ro/*' => Http::response(['error' => 'invalid'], 422),
+            'https://hearth.scmc.ro/*' => Http::response(['error' => 'invalid'], 422),
         ]);
 
         $response = $this->post(route('license-client.licenta.solicita'));
@@ -28,7 +28,7 @@ class SolicitaRemoteFailureTest extends TestCase
 
         $postedLicenseKey = null;
         Http::fake(function (\Illuminate\Http\Client\Request $request) use (&$postedLicenseKey) {
-            if (str_contains($request->url(), 'hearth.master-data.ro') && str_contains($request->url(), '/api/verify')) {
+            if (str_contains($request->url(), 'hearth.scmc.ro') && str_contains($request->url(), '/api/verify')) {
                 $postedLicenseKey = $request->data()['license_key'] ?? null;
 
                 return Http::response(['error' => 'stub_invalid_payload'], 422);

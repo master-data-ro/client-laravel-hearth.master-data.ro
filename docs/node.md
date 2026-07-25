@@ -11,7 +11,7 @@ npm install node-fetch
 ```js
 const HearthClient = require('./index');
 (async () => {
-  const client = new HearthClient('https://master-data.ro');
+  const client = new HearthClient('https://hearth.scmc.ro');
   const challenge = await client.getChallenge();
   console.log(challenge);
 })();

@@ -1,4 +1,4 @@
-# hearth.master-data.ro client
+# hearth.scmc.ro client
 
 [View on GitHub](https://github.com/master-data-ro/hearth-license-client)
 
@@ -136,7 +136,7 @@ php artisan make:license-server CHEIA-EMISA
 
 ## Cum funcționează (Principiul "ping-pong")
 
-1. **Clientul** trimite către autoritate (hearth.master-data.ro) **domeniul** (din `APP_URL`) și o **cheie** — la prima solicitare cheia poate fi **aleatoare**; după emitere se folosește cheia primită:
+1. **Clientul** trimite către autoritate (hearth.scmc.ro) **domeniul** (din `APP_URL`) și o **cheie** — la prima solicitare cheia poate fi **aleatoare**; după emitere se folosește cheia primită:
    ```bash
    php artisan make:license-server CHEIE-ALEATOARE-SAU-EMISA
    ```
@@ -153,7 +153,7 @@ Acest flux asigură că doar licențele validate de autoritate pot debloca aplic
 ## Flux
 
 1. **Clientul** (comandă/Interfață): Trimite cheie + domeniu către autoritate
-2. **Autoritatea** (hearth.master-data.ro): Răspunde cu status (valid/pending/invalid) + semnătură
+2. **Autoritatea** (hearth.scmc.ro): Răspunde cu status (valid/pending/invalid) + semnătură
 3. **Clientul**: Verifică semnătura, salvează local fișierul de licență criptat
 4. **Middleware**: Verifică la fiecare request dacă licența este validă
 5. **Aplicația Laravel**: Permite acces doar dacă licența este validă
@@ -177,7 +177,7 @@ Client → Autoritate → Client → Middleware → Aplicație
 ## Securitate / Security
 
 - Licența este salvată local, criptată în mod implicit; nu sunt necesare parole sau variabile suplimentare.
-- Cheia publică a autorității este preluată automat de la: `https://hearth.master-data.ro/keys/pem`.
+- Cheia publică a autorității este preluată automat de la: `https://hearth.scmc.ro/keys/pem`.
 
 ## Notă enforcement
 
